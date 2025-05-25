@@ -15,7 +15,7 @@ type InstanceRef struct {
 }
 
 type InstanceServiceExposureSpec struct {
-	InstanceRef InstanceRef          `json:"instanceRef"`
+	InstanceRef InstanceRef          `json:"instanceRef,omitempty"`
 	Services    []ServicePortMapping `json:"services"`
 }
 
