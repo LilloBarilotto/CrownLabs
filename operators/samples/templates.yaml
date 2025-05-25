@@ -12,7 +12,7 @@ apiVersion: v1
 kind: Namespace
 metadata:
   name: workspace-standalone
-# ---
+---
 # apiVersion: crownlabs.polito.it/v1alpha2
 # kind: Template
 # metadata:
@@ -26,6 +26,7 @@ metadata:
 #       environmentType: VirtualMachine
 #       image: registry.crownlabs.example.com/tea/green:finest
 #       guiEnabled: true
+#       mountMyDriveVolume: false
 #       persistent: false
 #       resources:
 #         cpu: 2
@@ -49,6 +50,7 @@ metadata:
 #       image: registry.crownlabs.example.com/coffee/dark:strongest
 #       guiEnabled: false
 #       persistent: true
+#       mountMyDriveVolume: false
 #       resources:
 #         cpu: 4
 #         memory: 1G
@@ -56,7 +58,7 @@ metadata:
 #   workspace.crownlabs.polito.it/WorkspaceRef:
 #     name: coffee
 #   deleteAfter: 1h
----
+# ---
 apiVersion: crownlabs.polito.it/v1alpha2
 kind: Template
 metadata:
@@ -69,6 +71,7 @@ spec:
     - name: vscode-environment
       environmentType: Standalone
       mode: Standard
+      mountMyDriveVolume: false
       image: harbor.crownlabs.polito.it/crownlabs-standalone/vscode-python:1.0.5
       containerStartupOptions:
         contentPath: /config/workspace
@@ -93,6 +96,7 @@ spec:
   description: A template about vscode
   environmentList:
     - name: vscode-environment
+      mountMyDriveVolume: false
       environmentType: Standalone
       mode: Standard
       image: harbor.crownlabs.polito.it/crownlabs-standalone/vscode-c-cpp:1.0.5
@@ -119,6 +123,7 @@ spec:
   description: A template about vscode
   environmentList:
     - name: jupyterlab-environment
+      mountMyDriveVolume: false
       environmentType: Standalone
       mode: Standard
       image: harbor.crownlabs.polito.it/crownlabs-standalone/jupyterlab:1.0.0
