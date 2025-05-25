@@ -17,7 +17,9 @@ spec:
       resources:
         cpu: 1
         memory: 512Mi
+        disk: 1Gi 
         reservedCPUPercentage: 25
+      persistent: false
   workspace.crownlabs.polito.it/WorkspaceRef:
     name: standalone
   deleteAfter: 7d
