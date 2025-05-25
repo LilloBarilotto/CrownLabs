@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	networkingv1alpha1 "github.com/your-repo/service-operator/api/v1alpha1" // Modifica questo con il tuo modulo effettivo
+	networkingv1alpha1 "github.com/crownlabs/service-operator/api/v1alpha1" // Modifica questo con il tuo modulo effettivo
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"

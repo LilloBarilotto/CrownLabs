@@ -12,7 +12,7 @@ spec:
       - ise
   scope: Namespaced
   versions:
-    - name: v1alpha1
+    - name: v1alpha2
       served: true
       storage: true
       schema:
@@ -22,13 +22,6 @@ spec:
             spec:
               type: object
               properties:
-                instanceRef:
-                  type: object
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
                 services:
                   type: array
                   items:
