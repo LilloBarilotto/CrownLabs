@@ -72,7 +72,7 @@ func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1al
 
 	// 2. Dividi le porte del servizio in porte specificate e automatiche
 	var specifiedPorts, autoPorts []clv1alpha2.ServicePortMapping
-	for _, svcPort := range instance.Spec.PublicExposure.Services {
+	for _, svcPort := range instance.Spec.PublicExposure.ServicesPortMappings {
 		if svcPort.Port != 0 {
 			specifiedPorts = append(specifiedPorts, svcPort)
 		} else {

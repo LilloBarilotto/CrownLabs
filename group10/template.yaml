@@ -11,7 +11,8 @@ spec:
       mountMyDriveVolume: false
       environmentType: Standalone
       mode: Standard
-      image: nicolaka/netshoot:latest
+      # Usa un'immagine più semplice che funziona out-of-the-box
+      image: wettyoss/wetty
       containerStartupOptions:
         contentPath: /root
       resources:

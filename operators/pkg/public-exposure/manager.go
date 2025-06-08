@@ -46,7 +46,7 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 	svcExists := err == nil
 
 	// Verifica se è richiesta l'esposizione
-	if instance.Spec.PublicExposure == nil || len(instance.Spec.PublicExposure.Services) == 0 {
+	if instance.Spec.PublicExposure == nil || len(instance.Spec.PublicExposure.ServicesPortMappings) == 0 {
 		if svcExists {
 			log.Info("Removing LoadBalancer service as exposure is no longer required", "service", svcName)
 			return m.Delete(ctx, existingSvc)
@@ -129,7 +129,7 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 func (m *Manager) serviceMatchesDesiredConfig(svc *v1.Service, instance *clv1alpha2.Instance) bool {
 	// Verifica che il servizio abbia le porte corrette
 	expectedPorts := make(map[string]clv1alpha2.ServicePortMapping)
-	for _, p := range instance.Spec.PublicExposure.Services {
+	for _, p := range instance.Spec.PublicExposure.ServicesPortMappings {
 		expectedPorts[p.Name] = p
 	}
 

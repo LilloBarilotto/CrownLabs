@@ -1,7 +1,7 @@
 apiVersion: crownlabs.polito.it/v1alpha2
 kind: Instance
 metadata:
-  name: netshoot-test7
+  name: netshoot-test8
   namespace: tenant-john-doe
 spec:
   template.crownlabs.polito.it/TemplateRef:
@@ -10,10 +10,13 @@ spec:
   tenant.crownlabs.polito.it/TenantRef:
     name: john.doe
   publicExposure:
-    services:
+    servicesportmappings:
       - name: ssh
-        port: 0
+        port: 0 # TODO cambiare in publicPort 
         targetPort: 22
       - name: http
-        port: 0
+        port: 30005
         targetPort: 80
+      - name: https
+        port: 0
+        targetPort: 443

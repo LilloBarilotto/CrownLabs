@@ -141,6 +141,9 @@ type InstanceStatus struct {
 
 	// The actual nodeSelector assigned to the Instance.
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// The status of the Instance service exposure, if any.
+	PublicExposureStatus *InstanceServiceExposureStatus `json:"publicExposureStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -170,6 +173,24 @@ type InstanceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Instance `json:"items"`
+}
+
+// ServicePortMapping definisce il mapping delle porte per un servizio
+type ServicePortMapping struct {
+	Name         string `json:"name"`
+	Port         int32  `json:"port"`                   // Porta pubblica richiesta (0 = automatica)
+	TargetPort   int32  `json:"targetPort"`             // Porta del container
+	AssignedPort int32  `json:"assignedPort,omitempty"` // Porta effettivamente assegnata (per status)
+}
+
+// InstanceServiceExposureSpec definisce le specifiche per l'esposizione pubblica di un'istanza
+type InstanceServiceExposureSpec struct {
+	ServicesPortMappings []ServicePortMapping `json:"servicesportmappings"`
+}
+
+type InstanceServiceExposureStatus struct {
+	ExternalIP           string               `json:"externalIP,omitempty"`
+	ServicesPortMappings []ServicePortMapping `json:"assignedPorts,omitempty"`
 }
 
 func init() {
