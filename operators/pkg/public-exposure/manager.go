@@ -16,18 +16,18 @@ import (
 )
 
 const (
-	metallbPoolName = "my-ip-pool" // Unifica con il controller
-	sharedIPValue   = "true"       // Unifica con il controller
+	metallbPoolName = "my-ip-pool" // Unified with the controller
+	sharedIPValue   = "true"       // Unified with the controller
 	basePort        = 30000
 )
 
-// Manager gestisce l'esposizione pubblica delle istanze
+// Manager manages the public exposure of instances
 type Manager struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// NewManager crea un nuovo manager per l'esposizione pubblica
+// NewManager creates a new manager for public exposure
 func NewManager(client client.Client, scheme *runtime.Scheme) *Manager {
 	return &Manager{
 		Client: client,
@@ -35,7 +35,7 @@ func NewManager(client client.Client, scheme *runtime.Scheme) *Manager {
 	}
 }
 
-// ReconcileExposure riconcilia l'esposizione pubblica per un'istanza
+// ReconcileExposure reconciles the public exposure for an instance
 func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.Instance) error {
 	log := ctrl.LoggerFrom(ctx)
 	log.Info("Reconciling instance exposure", "instance", instance.Name)
@@ -45,7 +45,7 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 	err := m.Get(ctx, types.NamespacedName{Name: svcName, Namespace: instance.Namespace}, existingSvc)
 	svcExists := err == nil
 
-	// Verifica se è richiesta l'esposizione
+	// Check if exposure is required
 	if instance.Spec.PublicExposure == nil || len(instance.Spec.PublicExposure.ServicesPortMappings) == 0 {
 		if svcExists {
 			log.Info("Removing LoadBalancer service as exposure is no longer required", "service", svcName)
@@ -54,28 +54,29 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 		return nil
 	}
 
-	// SE IL SERVIZIO ESISTE GIÀ, VERIFICA SE È GIÀ CORRETTO PRIMA DI FARE QUALSIASI ALTRA OPERAZIONE
+	// IF THE SERVICE ALREADY EXISTS, CHECK IF IT'S ALREADY CORRECT BEFORE DOING ANY OTHER OPERATION
 	if svcExists {
-		// Verifica se la configurazione attuale è già quella desiderata
+		// Check if the current configuration is already the desired one
 		if m.serviceMatchesDesiredConfig(existingSvc, instance) {
 			log.Info("Service already has correct configuration, skipping update", "service", svcName)
 			return nil
 		}
 	}
 
-	// Ottieni le porte utilizzate (escludendo il servizio corrente)
+	// Get the used ports (excluding the current service)
 	usedPortsByIP, err := m.updateUsedPortsByIP(ctx, instance.Namespace, svcName)
 	if err != nil {
 		return err
 	}
 
-	// Trova il miglior IP e assegna le porte
+	// Find the best IP and assign ports
 	targetIP, assignedPorts, err := m.findBestIPAndAssignPorts(ctx, instance, usedPortsByIP)
+	// fmt.Println("targetIP", targetIP, "assignedPorts", assignedPorts, "err", err)
 	if err != nil {
 		return err
 	}
 
-	// Crea o aggiorna il servizio
+	// Create or update the service
 	svc := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
@@ -84,18 +85,18 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 	}
 
 	_, err = controllerutil.CreateOrUpdate(ctx, m.Client, svc, func() error {
-		// Imposta owner reference
+		// Set owner reference
 		if err := controllerutil.SetControllerReference(instance, svc, m.Scheme); err != nil {
 			return err
 		}
 
-		// Configura il servizio
+		// Configure the service
 		svc.Spec.Type = v1.ServiceTypeLoadBalancer
 		svc.Spec.Selector = map[string]string{
 			"crownlabs.polito.it/instance": instance.Name,
 		}
 
-		// Imposta le annotazioni per MetalLB
+		// Set annotations for MetalLB
 		if svc.Annotations == nil {
 			svc.Annotations = make(map[string]string)
 		}
@@ -103,7 +104,7 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 		svc.Annotations["metallb.universe.tf/allow-shared-ip"] = sharedIPValue
 		svc.Annotations["metallb.universe.tf/loadBalancerIPs"] = targetIP
 
-		// Configura le porte del servizio
+		// Configure service ports
 		svc.Spec.Ports = []v1.ServicePort{}
 		for _, p := range assignedPorts {
 			svc.Spec.Ports = append(svc.Spec.Ports, v1.ServicePort{
@@ -125,32 +126,32 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 	return nil
 }
 
-// serviceMatchesDesiredConfig verifica se il servizio esistente corrisponde già alla configurazione desiderata
+// serviceMatchesDesiredConfig checks if the existing service already matches the desired configuration
 func (m *Manager) serviceMatchesDesiredConfig(svc *v1.Service, instance *clv1alpha2.Instance) bool {
-	// Verifica che il servizio abbia le porte corrette
+	// Check that the service has the correct ports
 	expectedPorts := make(map[string]clv1alpha2.ServicePortMapping)
 	for _, p := range instance.Spec.PublicExposure.ServicesPortMappings {
 		expectedPorts[p.Name] = p
 	}
 
-	// Se il numero di porte non corrisponde, il servizio deve essere aggiornato
+	// If the number of ports doesn't match, the service must be updated
 	if len(svc.Spec.Ports) != len(expectedPorts) {
 		return false
 	}
 
-	// Verifica ogni porta
+	// Check each port
 	for _, port := range svc.Spec.Ports {
 		expectedPort, exists := expectedPorts[port.Name]
 		if !exists {
 			return false
 		}
 
-		// Per le porte specificate (non 0), verifica che corrispondano
+		// For specified ports (not 0), check that they match
 		if expectedPort.Port != 0 && port.Port != expectedPort.Port {
 			return false
 		}
 
-		// Verifica che la target port corrisponda
+		// Check that the target port matches
 		if port.TargetPort.IntVal != expectedPort.TargetPort {
 			return false
 		}
@@ -159,7 +160,7 @@ func (m *Manager) serviceMatchesDesiredConfig(svc *v1.Service, instance *clv1alp
 	return true
 }
 
-// CleanupExposure rimuove il servizio LoadBalancer se non più necessario
+// CleanupExposure removes the LoadBalancer service if no longer needed
 func (m *Manager) CleanupExposure(ctx context.Context, instance *clv1alpha2.Instance) error {
 	log := ctrl.LoggerFrom(ctx)
 	svcName := fmt.Sprintf("instance-lb-%s", instance.Name)

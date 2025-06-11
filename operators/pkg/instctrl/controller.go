@@ -66,7 +66,8 @@ type InstanceReconciler struct {
 	// in order to lead to a controlled failure in case the Reconcile panics.
 	ReconcileDeferHook func()
 
-	// Aggiungi il manager per l'esposizione pubblica
+	// Add manager for public exposure of instances.
+	// TODO: remove this into future versions, need to be implemented into main
 	ExposureManager *publicexposure.Manager
 }
 
@@ -183,7 +184,8 @@ func (r *InstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 		return ctrl.Result{}, err
 	}
 
-	// Gestisci l'esposizione pubblica dell'istanza
+	// CAll the function to enforce the public exposure of the instance.
+	// TODO: remove this into future versions, no need to call explicitly the ReconcileExposure function
 	if err := r.ExposureManager.ReconcileExposure(ctx, &instance); err != nil {
 		log.Error(err, "Failed to reconcile instance exposure")
 		return ctrl.Result{}, err
@@ -265,15 +267,14 @@ func (r *InstanceReconciler) setInitialReadyTimeIfNecessary(ctx context.Context)
 func (r *InstanceReconciler) SetupWithManager(mgr ctrl.Manager, concurrency int) error {
 	mgr.GetLogger().Info("setup manager")
 
-	// Inizializza il manager per l'esposizione pubblica con lo scheme
+	// Inizialize the public exposure manager with the scheme
+	// TODO: change this and put into main
 	r.ExposureManager = publicexposure.NewManager(mgr.GetClient(), mgr.GetScheme())
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&clv1alpha2.Instance{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&virtv1.VirtualMachine{}).
-		// RIMUOVI QUESTA LINEA per evitare loop infiniti
-		// Owns(&v1.Service{}).
 		// Here, we use Watches instead of Owns since we need to react also in case a VMI generated from a VM is updated,
 		// to correctly update the instance phase in case of persistent VMs with resource quota exceeded.
 		Watches(&virtv1.VirtualMachineInstance{}, handler.EnqueueRequestsFromMapFunc(r.vmiToInstance)).
