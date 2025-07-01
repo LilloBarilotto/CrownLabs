@@ -6,6 +6,7 @@ import (
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -42,8 +43,16 @@ func (m *Manager) ReconcileExposure(ctx context.Context, instance *clv1alpha2.In
 
 	svcName := fmt.Sprintf("instance-lb-%s", instance.Name)
 	existingSvc := &v1.Service{}
+
+	svcExists := false
 	err := m.Get(ctx, types.NamespacedName{Name: svcName, Namespace: instance.Namespace}, existingSvc)
-	svcExists := err == nil
+	if err != nil {
+		if errors.IsAlreadyExists(err) {
+			svcExists = true
+		} else {
+			return fmt.Errorf("failed to get service %s: %w", svcName, err)
+		}
+	}
 
 	// Check if exposure is required
 	if instance.Spec.PublicExposure == nil || len(instance.Spec.PublicExposure.ServicesPortMappings) == 0 {
