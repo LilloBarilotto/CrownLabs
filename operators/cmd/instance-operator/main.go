@@ -42,6 +42,8 @@ import (
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/instctrl"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/shvolctrl"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/utils/restcfg"
+
+	publicexposure "github.com/netgroup-polito/CrownLabs/operators/pkg/public-exposure"
 )
 
 var (
@@ -122,6 +124,8 @@ func main() {
 
 	nsWhitelist := metav1.LabelSelector{MatchLabels: whiteListMap, MatchExpressions: []metav1.LabelSelectorRequirement{}}
 
+	exposureManager := publicexposure.NewManager(mgr.GetClient(), mgr.GetScheme())
+
 	// Configure the Instance controller
 	const instanceCtrlName = "Instance"
 	if err = (&instctrl.InstanceReconciler{
@@ -131,6 +135,7 @@ func main() {
 		NamespaceWhitelist: nsWhitelist,
 		ServiceUrls:        svcUrls,
 		ContainerEnvOpts:   containerEnvOpts,
+		ExposureManager:    exposureManager,
 	}).SetupWithManager(mgr, *maxConcurrentReconciles); err != nil {
 		log.Error(err, "unable to create controller", "controller", instanceCtrlName)
 		os.Exit(1)
