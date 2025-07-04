@@ -187,11 +187,16 @@ func (r *InstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}
 
 	// Handle public exposure if configured
-	if r.ExposureManager != nil {
+	if r.ExposureManager != nil && instance.Spec.Running { // NEW: Handle public exposure
 		if err := r.ExposureManager.ReconcileExposure(ctx, &instance); err != nil {
 			log.Error(err, "failed to reconcile public exposure")
-			// Non restituire errore - l'esposizione pubblica è opzionale
-			// Se vuoi che sia bloccante: return ctrl.Result{}, err
+			// Decide if this should be a blocking error. For now, we log it but don't fail the reconcile.
+			r.EventsRecorder.Eventf(&instance, v1.EventTypeWarning, "PublicExposureFailed", "Failed to configure public exposure: %v", err)
+		}
+	} else if r.ExposureManager != nil && !instance.Spec.Running {
+		// Cleanup if instance is not running
+		if err := r.ExposureManager.ReconcileExposure(ctx, &instance); err != nil {
+			log.Error(err, "failed to cleanup public exposure")
 		}
 	}
 
