@@ -40,10 +40,9 @@ import (
 	instancesnapshot_controller "github.com/netgroup-polito/CrownLabs/operators/pkg/instancesnapshot-controller"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/instautoctrl"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/instctrl"
+	publicexposure "github.com/netgroup-polito/CrownLabs/operators/pkg/public-exposure"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/shvolctrl"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/utils/restcfg"
-
-	publicexposure "github.com/netgroup-polito/CrownLabs/operators/pkg/public-exposure"
 )
 
 var (

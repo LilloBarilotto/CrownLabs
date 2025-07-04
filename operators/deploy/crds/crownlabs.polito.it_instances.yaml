@@ -107,8 +107,8 @@ spec:
                   ports:
                     description: The list of ports to expose.
                     items:
-                      description: PublicServicePort defines the specifications of
-                        mapping of ports for a service.
+                      description: PublicServicePort defines the mapping of ports
+                        for a service.
                       properties:
                         name:
                           description: A friendly name for the port.
@@ -137,16 +137,7 @@ spec:
                 type: object
               running:
                 default: true
-                description: |-
-                  Whether the current instance is running or not.
-                  The meaning of this flag is different depending on whether the instance
-                  refers to a persistent environment or not. If the first case, it allows to
-                  stop the environment (e.g. the underlying VM) without deleting the associated
-                  disk. Setting the flag to true will restart the environment, attaching it
-                  to the same disk used previously. Differently, if the environment is not
-                  persistent, it only tears down the exposition objects, making the instance
-                  effectively unreachable from outside the cluster, but allowing the
-                  subsequent recreation without data loss.
+                description: Whether the current instance is running or not.
                 type: boolean
               template.crownlabs.polito.it/TemplateRef:
                 description: The reference to the Template to be instantiated.
@@ -208,10 +199,7 @@ spec:
                   upon creation.
                 type: string
               ip:
-                description: |-
-                  The internal IP address associated with the remote environment, which can
-                  be used to access it through the SSH protocol (leveraging the SSH bastion
-                  in case it is not contacted from another CrownLabs Instance).
+                description: The internal IP address associated with the remote environment.
                 type: string
               nodeName:
                 description: The node on which the Instance is running.
@@ -224,9 +212,7 @@ spec:
               phase:
                 description: |-
                   The current status Instance, with reference to the associated environment
-                  (e.g. VM). This conveys which resource is being created, as well as
-                  whether the associated VM is being scheduled, is running or ready to
-                  accept incoming connections.
+                  (e.g. VM).
                 enum:
                 - ""
                 - Importing

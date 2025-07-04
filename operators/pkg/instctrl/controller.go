@@ -41,9 +41,8 @@ import (
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	clctx "github.com/netgroup-polito/CrownLabs/operators/pkg/context"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"
-	"github.com/netgroup-polito/CrownLabs/operators/pkg/utils"
-
 	publicexposure "github.com/netgroup-polito/CrownLabs/operators/pkg/public-exposure"
+	"github.com/netgroup-polito/CrownLabs/operators/pkg/utils"
 )
 
 const (

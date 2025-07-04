@@ -36,12 +36,10 @@ const (
 	// EnvironmentPhaseRunning -> the environment is running, but not yet ready.
 	EnvironmentPhaseRunning EnvironmentPhase = "Running"
 	// EnvironmentPhaseReady -> the environment is ready to be accessed.
-	// with the current CrownLabs dashboard.
 	EnvironmentPhaseReady EnvironmentPhase = "Ready"
 	// EnvironmentPhaseStopping -> the environment is being stopped.
 	EnvironmentPhaseStopping EnvironmentPhase = "Stopping"
 	// EnvironmentPhaseOff -> the environment is currently shut down.
-	// with the current CrownLabs dashboard.
 	EnvironmentPhaseOff EnvironmentPhase = "Off"
 	// EnvironmentPhaseFailed -> the environment has failed, and cannot be restarted.
 	EnvironmentPhaseFailed EnvironmentPhase = "Failed"
@@ -73,14 +71,6 @@ type InstanceSpec struct {
 	// +kubebuilder:validation:Optional
 
 	// Whether the current instance is running or not.
-	// The meaning of this flag is different depending on whether the instance
-	// refers to a persistent environment or not. If the first case, it allows to
-	// stop the environment (e.g. the underlying VM) without deleting the associated
-	// disk. Setting the flag to true will restart the environment, attaching it
-	// to the same disk used previously. Differently, if the environment is not
-	// persistent, it only tears down the exposition objects, making the instance
-	// effectively unreachable from outside the cluster, but allowing the
-	// subsequent recreation without data loss.
 	Running bool `json:"running"`
 
 	// Custom name the user can assign and change at any time
@@ -115,18 +105,14 @@ type InstanceAutomationStatus struct {
 // InstanceStatus reflects the most recently observed status of the Instance.
 type InstanceStatus struct {
 	// The current status Instance, with reference to the associated environment
-	// (e.g. VM). This conveys which resource is being created, as well as
-	// whether the associated VM is being scheduled, is running or ready to
-	// accept incoming connections.
+	// (e.g. VM).
 	Phase EnvironmentPhase `json:"phase,omitempty"`
 
 	// The URL where it is possible to access the remote desktop of the instance
 	// (in case of graphical environments)
 	URL string `json:"url,omitempty"`
 
-	// The internal IP address associated with the remote environment, which can
-	// be used to access it through the SSH protocol (leveraging the SSH bastion
-	// in case it is not contacted from another CrownLabs Instance).
+	// The internal IP address associated with the remote environment.
 	IP string `json:"ip,omitempty"`
 
 	// The amount of time the Instance required to become ready for the first time
@@ -152,7 +138,7 @@ type InstancePublicExposure struct {
 	Ports []PublicServicePort `json:"ports"`
 }
 
-// PublicServicePort defines the specifications of mapping of ports for a service.
+// PublicServicePort defines the mapping of ports for a service.
 type PublicServicePort struct {
 	// A friendly name for the port.
 	Name string `json:"name"`
