@@ -97,7 +97,7 @@ type InstanceSpec struct {
 	// Optional specification of the Instance service exposure.
 	// If set, it will be used to expose the Instance services to the outside world.
 	// LoadBalancer will be created with the specified ports thanks to MetalLB and annotations.
-	PublicExposure *InstanceServiceExposureSpec `json:"publicExposure,omitempty"`
+	PublicExposure *InstancePublicExposure `json:"publicExposure,omitempty"`
 }
 
 // InstanceAutomationStatus reflects the status of the instance's automation (termination and submission).
@@ -143,7 +143,45 @@ type InstanceStatus struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 
 	// The status of the Instance service exposure, if any.
-	PublicExposureStatus *InstanceServiceExposureStatus `json:"publicExposureStatus,omitempty"`
+	PublicExposure *InstancePublicExposureStatus `json:"publicExposure,omitempty"`
+}
+
+// InstancePublicExposure defines the specifications for the public exposure of an instance.
+type InstancePublicExposure struct {
+	// The list of ports to expose.
+	Ports []PublicServicePort `json:"ports"`
+}
+
+// PublicServicePort defines the specifications of mapping of ports for a service.
+type PublicServicePort struct {
+	// A friendly name for the port.
+	Name string `json:"name"`
+	// The public port to request. If 0, a random port from the ephemeral range will be assigned.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=65535
+	Port int32 `json:"port"`
+	// The port on the container to target.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	TargetPort int32 `json:"targetPort"`
+}
+
+// InstancePublicExposureStatus defines the observed state of the public exposure.
+type InstancePublicExposureStatus struct {
+	// The external IP address assigned to the LoadBalancer service.
+	ExternalIP string `json:"externalIP,omitempty"`
+	// The list of port mappings with the actually assigned public ports.
+	Ports []AssignedPublicServicePort `json:"ports,omitempty"`
+}
+
+// AssignedPublicServicePort defines the mapping of an exposed port with its assigned value.
+type AssignedPublicServicePort struct {
+	// The friendly name for the port.
+	Name string `json:"name"`
+	// The public port assigned by the operator.
+	Port int32 `json:"port"`
+	// The port on the container that is being targeted.
+	TargetPort int32 `json:"targetPort"`
 }
 
 // +kubebuilder:object:root=true
@@ -173,24 +211,6 @@ type InstanceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Instance `json:"items"`
-}
-
-// ServicePortMapping definisce il mapping delle porte per un servizio
-type ServicePortMapping struct {
-	Name         string `json:"name"`
-	Port         int32  `json:"port"`                   // Porta pubblica richiesta (0 = automatica)
-	TargetPort   int32  `json:"targetPort"`             // Porta del container
-	AssignedPort int32  `json:"assignedPort,omitempty"` // Porta effettivamente assegnata (per status)
-}
-
-// InstanceServiceExposureSpec definisce le specifiche per l'esposizione pubblica di un'istanza
-type InstanceServiceExposureSpec struct {
-	ServicesPortMappings []ServicePortMapping `json:"servicesportmappings"`
-}
-
-type InstanceServiceExposureStatus struct {
-	ExternalIP           string               `json:"externalIP,omitempty"`
-	ServicesPortMappings []ServicePortMapping `json:"assignedPorts,omitempty"`
 }
 
 func init() {

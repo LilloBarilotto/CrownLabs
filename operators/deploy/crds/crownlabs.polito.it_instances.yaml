@@ -104,21 +104,27 @@ spec:
                   If set, it will be used to expose the Instance services to the outside world.
                   LoadBalancer will be created with the specified ports thanks to MetalLB and annotations.
                 properties:
-                  servicesportmappings:
+                  ports:
+                    description: The list of ports to expose.
                     items:
-                      description: ServicePortMapping definisce il mapping delle porte
-                        per un servizio
+                      description: PublicServicePort defines the specifications of
+                        mapping of ports for a service.
                       properties:
-                        assignedPort:
-                          format: int32
-                          type: integer
                         name:
+                          description: A friendly name for the port.
                           type: string
                         port:
+                          description: The public port to request. If 0, a random
+                            port from the ephemeral range will be assigned.
                           format: int32
+                          maximum: 65535
+                          minimum: 0
                           type: integer
                         targetPort:
+                          description: The port on the container to target.
                           format: int32
+                          maximum: 65535
+                          minimum: 1
                           type: integer
                       required:
                       - name
@@ -127,7 +133,7 @@ spec:
                       type: object
                     type: array
                 required:
-                - servicesportmappings
+                - ports
                 type: object
               running:
                 default: true
@@ -233,23 +239,29 @@ spec:
                 - Failed
                 - CreationLoopBackoff
                 type: string
-              publicExposureStatus:
+              publicExposure:
                 description: The status of the Instance service exposure, if any.
                 properties:
-                  assignedPorts:
+                  externalIP:
+                    description: The external IP address assigned to the LoadBalancer
+                      service.
+                    type: string
+                  ports:
+                    description: The list of port mappings with the actually assigned
+                      public ports.
                     items:
-                      description: ServicePortMapping definisce il mapping delle porte
-                        per un servizio
+                      description: AssignedPublicServicePort defines the mapping of
+                        an exposed port with its assigned value.
                       properties:
-                        assignedPort:
-                          format: int32
-                          type: integer
                         name:
+                          description: The friendly name for the port.
                           type: string
                         port:
+                          description: The public port assigned by the operator.
                           format: int32
                           type: integer
                         targetPort:
+                          description: The port on the container that is being targeted.
                           format: int32
                           type: integer
                       required:
@@ -258,8 +270,6 @@ spec:
                       - targetPort
                       type: object
                     type: array
-                  externalIP:
-                    type: string
                 type: object
               url:
                 description: |-
