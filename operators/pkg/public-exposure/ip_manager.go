@@ -52,7 +52,7 @@ func (m *Manager) buildPrioritizedIPPool(fullPool []string, usedPortsByIP map[st
 }
 
 // findBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
-func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.AssignedPublicServicePort, error) {
+func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 
 	fullIPPool, err := m.getMetalLBIPPool(ctx)
@@ -115,7 +115,7 @@ func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1al
 			}
 		}
 
-		var tempAssignedPorts []clv1alpha2.AssignedPublicServicePort
+		var tempAssignedPorts []clv1alpha2.PublicServicePort
 		isIPCompatible := true
 
 		// 1. Check if all specified ports can be assigned on this IP.
@@ -125,7 +125,7 @@ func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1al
 				break
 			}
 			simulatedPortsInUse[port.Port] = true // Simulate port assignment.
-			tempAssignedPorts = append(tempAssignedPorts, clv1alpha2.AssignedPublicServicePort{
+			tempAssignedPorts = append(tempAssignedPorts, clv1alpha2.PublicServicePort{
 				Name:       port.Name,
 				Port:       port.Port,
 				TargetPort: port.TargetPort,
@@ -153,7 +153,7 @@ func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1al
 				allAutoPortsAssignable = false
 				break
 			}
-			tempAssignedPorts = append(tempAssignedPorts, clv1alpha2.AssignedPublicServicePort{
+			tempAssignedPorts = append(tempAssignedPorts, clv1alpha2.PublicServicePort{
 				Name:       port.Name,
 				Port:       assignedPort,
 				TargetPort: port.TargetPort,

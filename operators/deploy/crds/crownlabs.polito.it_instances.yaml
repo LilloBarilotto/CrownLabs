@@ -105,7 +105,10 @@ spec:
                   LoadBalancer will be created with the specified ports thanks to MetalLB and annotations.
                 properties:
                   ports:
-                    description: The list of ports to expose.
+                    description: |-
+                      The list of ports to expose.
+                      If 'Port' is set to 0, a random port from the ephemeral range will be assigned.
+                      If no ports are specified, the service will not be exposed with a LoadBalancer
                     items:
                       description: PublicServicePort defines the mapping of ports
                         for a service.
@@ -114,8 +117,9 @@ spec:
                           description: A friendly name for the port.
                           type: string
                         port:
-                          description: The public port to request. If 0, a random
-                            port from the ephemeral range will be assigned.
+                          default: 0
+                          description: The public port to request. If 0 in spec, a
+                            random port from the ephemeral range will be assigned.
                           format: int32
                           maximum: 65535
                           minimum: 0
@@ -137,7 +141,16 @@ spec:
                 type: object
               running:
                 default: true
-                description: Whether the current instance is running or not.
+                description: |-
+                  Whether the current instance is running or not.
+                  The meaning of this flag is different depending on whether the instance
+                  refers to a persistent environment or not. If the first case, it allows to
+                  stop the environment (e.g. the underlying VM) without deleting the associated
+                  disk. Setting the flag to true will restart the environment, attaching it
+                  to the same disk used previously. Differently, if the environment is not
+                  persistent, it only tears down the exposition objects, making the instance
+                  effectively unreachable from outside the cluster, but allowing the
+                  subsequent recreation without data loss.
                 type: boolean
               template.crownlabs.polito.it/TemplateRef:
                 description: The reference to the Template to be instantiated.
@@ -199,7 +212,10 @@ spec:
                   upon creation.
                 type: string
               ip:
-                description: The internal IP address associated with the remote environment.
+                description: |-
+                  The internal IP address associated with the remote environment, which can
+                  be used to access it through the SSH protocol (leveraging the SSH bastion
+                  in case it is not contacted from another CrownLabs Instance).
                 type: string
               nodeName:
                 description: The node on which the Instance is running.
@@ -212,7 +228,9 @@ spec:
               phase:
                 description: |-
                   The current status Instance, with reference to the associated environment
-                  (e.g. VM).
+                  (e.g. VM). This conveys which resource is being created, as well as
+                  whether the associated VM is being scheduled, is running or ready to
+                  accept incoming connections.
                 enum:
                 - ""
                 - Importing
@@ -232,23 +250,37 @@ spec:
                     description: The external IP address assigned to the LoadBalancer
                       service.
                     type: string
+                  phase:
+                    description: The current phase of the public exposure.
+                    enum:
+                    - ""
+                    - Provisioning
+                    - Ready
+                    - Error
+                    type: string
                   ports:
                     description: The list of port mappings with the actually assigned
-                      public ports.
+                      public ports in 'Port' field.
                     items:
-                      description: AssignedPublicServicePort defines the mapping of
-                        an exposed port with its assigned value.
+                      description: PublicServicePort defines the mapping of ports
+                        for a service.
                       properties:
                         name:
-                          description: The friendly name for the port.
+                          description: A friendly name for the port.
                           type: string
                         port:
-                          description: The public port assigned by the operator.
+                          default: 0
+                          description: The public port to request. If 0 in spec, a
+                            random port from the ephemeral range will be assigned.
                           format: int32
+                          maximum: 65535
+                          minimum: 0
                           type: integer
                         targetPort:
-                          description: The port on the container that is being targeted.
+                          description: The port on the container to target.
                           format: int32
+                          maximum: 65535
+                          minimum: 1
                           type: integer
                       required:
                       - name

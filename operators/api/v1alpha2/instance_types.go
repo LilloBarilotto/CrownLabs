@@ -71,6 +71,14 @@ type InstanceSpec struct {
 	// +kubebuilder:validation:Optional
 
 	// Whether the current instance is running or not.
+	// The meaning of this flag is different depending on whether the instance
+	// refers to a persistent environment or not. If the first case, it allows to
+	// stop the environment (e.g. the underlying VM) without deleting the associated
+	// disk. Setting the flag to true will restart the environment, attaching it
+	// to the same disk used previously. Differently, if the environment is not
+	// persistent, it only tears down the exposition objects, making the instance
+	// effectively unreachable from outside the cluster, but allowing the
+	// subsequent recreation without data loss.
 	Running bool `json:"running"`
 
 	// Custom name the user can assign and change at any time
@@ -105,14 +113,18 @@ type InstanceAutomationStatus struct {
 // InstanceStatus reflects the most recently observed status of the Instance.
 type InstanceStatus struct {
 	// The current status Instance, with reference to the associated environment
-	// (e.g. VM).
+	// (e.g. VM). This conveys which resource is being created, as well as
+	// whether the associated VM is being scheduled, is running or ready to
+	// accept incoming connections.
 	Phase EnvironmentPhase `json:"phase,omitempty"`
 
 	// The URL where it is possible to access the remote desktop of the instance
 	// (in case of graphical environments)
 	URL string `json:"url,omitempty"`
 
-	// The internal IP address associated with the remote environment.
+	// The internal IP address associated with the remote environment, which can
+	// be used to access it through the SSH protocol (leveraging the SSH bastion
+	// in case it is not contacted from another CrownLabs Instance).
 	IP string `json:"ip,omitempty"`
 
 	// The amount of time the Instance required to become ready for the first time
@@ -135,6 +147,8 @@ type InstanceStatus struct {
 // InstancePublicExposure defines the specifications for the public exposure of an instance.
 type InstancePublicExposure struct {
 	// The list of ports to expose.
+	// If 'Port' is set to 0, a random port from the ephemeral range will be assigned.
+	// If no ports are specified, the service will not be exposed with a LoadBalancer
 	Ports []PublicServicePort `json:"ports"`
 }
 
@@ -142,9 +156,10 @@ type InstancePublicExposure struct {
 type PublicServicePort struct {
 	// A friendly name for the port.
 	Name string `json:"name"`
-	// The public port to request. If 0, a random port from the ephemeral range will be assigned.
+	// The public port to request. If 0 in spec, a random port from the ephemeral range will be assigned.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=65535
+	// +kubebuilder:default=0
 	Port int32 `json:"port"`
 	// The port on the container to target.
 	// +kubebuilder:validation:Minimum=1
@@ -152,22 +167,29 @@ type PublicServicePort struct {
 	TargetPort int32 `json:"targetPort"`
 }
 
+// PublicExposurePhase is an enumeration of the different phases associated with the public exposure of an instance.
+// +kubebuilder:validation:Enum="";"Provisioning";"Ready";"Error"
+type PublicExposurePhase string
+
+const (
+	// PublicExposurePhaseUnset -> the public exposure phase is unknown or unset.
+	PublicExposurePhaseUnset PublicExposurePhase = ""
+	// PublicExposurePhaseProvisioning -> the public exposure is being provisioned.
+	PublicExposurePhaseProvisioning PublicExposurePhase = "Provisioning"
+	// PublicExposurePhaseReady -> the public exposure is ready and accessible.
+	PublicExposurePhaseReady PublicExposurePhase = "Ready"
+	// PublicExposurePhaseError -> an error occurred during public exposure provisioning.
+	PublicExposurePhaseError PublicExposurePhase = "Error"
+)
+
 // InstancePublicExposureStatus defines the observed state of the public exposure.
 type InstancePublicExposureStatus struct {
 	// The external IP address assigned to the LoadBalancer service.
 	ExternalIP string `json:"externalIP,omitempty"`
-	// The list of port mappings with the actually assigned public ports.
-	Ports []AssignedPublicServicePort `json:"ports,omitempty"`
-}
-
-// AssignedPublicServicePort defines the mapping of an exposed port with its assigned value.
-type AssignedPublicServicePort struct {
-	// The friendly name for the port.
-	Name string `json:"name"`
-	// The public port assigned by the operator.
-	Port int32 `json:"port"`
-	// The port on the container that is being targeted.
-	TargetPort int32 `json:"targetPort"`
+	// The list of port mappings with the actually assigned public ports in 'Port' field.
+	Ports []PublicServicePort `json:"ports,omitempty"`
+	// The current phase of the public exposure.
+	Phase PublicExposurePhase `json:"phase,omitempty"`
 }
 
 // +kubebuilder:object:root=true
