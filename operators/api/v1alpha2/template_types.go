@@ -74,7 +74,7 @@ type TemplateSpec struct {
 
 	// +kubebuilder:default=false
 	// Whether the Template has the authorization to be Public Exposed or not, using a LoadBalancer service.
-	PublicExposureEnabled bool `json:"publicExposureEnabled,omitempty"`
+	AllowPublicExposure bool `json:"allowPublicExposure,omitempty"`
 }
 
 // TemplateStatus reflects the most recently observed status of the Template.

@@ -69,6 +69,11 @@ spec:
             description: TemplateSpec is the specification of the desired state of
               the Template.
             properties:
+              allowPublicExposure:
+                default: false
+                description: Whether the Template has the authorization to be Public
+                  Exposed or not, using a LoadBalancer service.
+                type: boolean
               deleteAfter:
                 default: never
                 description: |-
@@ -271,11 +276,6 @@ spec:
               prettyName:
                 description: The human-readable name of the Template.
                 type: string
-              publicExposureEnabled:
-                default: false
-                description: Whether the Template has the authorization to be Public
-                  Exposed or not, using a LoadBalancer service.
-                type: boolean
               workspace.crownlabs.polito.it/WorkspaceRef:
                 description: The reference to the Workspace this Template belongs
                   to.
