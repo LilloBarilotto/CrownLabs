@@ -1,4 +1,4 @@
-package publicexposure
+package instctrl
 
 import (
 	"context"
@@ -12,11 +12,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
+	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"
 )
 
-// getMetalLBIPPool retrieves the IP pool configured in MetalLB.
-// TODO: Implement logic to get the IP pool dynamically from MetalLB ConfigMap or CRDs if they exist.
-func (m *Manager) getMetalLBIPPool(_ context.Context) ([]string, error) {
+// GetMetalLBIPPool retrieves the IP pool configured in MetalLB.
+func GetMetalLBIPPool(_ context.Context) ([]string, error) {
 	// For now, this returns a static pool. This should be made configurable.
 	return []string{
 		"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243",
@@ -25,9 +25,9 @@ func (m *Manager) getMetalLBIPPool(_ context.Context) ([]string, error) {
 	}, nil
 }
 
-// buildPrioritizedIPPool creates a sorted IP pool, prioritizing IPs that are already in use.
+// BuildPrioritizedIPPool creates a sorted IP pool, prioritizing IPs that are already in use.
 // This encourages IP reuse and reduces IP fragmentation.
-func (m *Manager) buildPrioritizedIPPool(fullPool []string, usedPortsByIP map[string]map[int32]bool) []string {
+func BuildPrioritizedIPPool(fullPool []string, usedPortsByIP map[string]map[int32]bool) []string {
 	usedIPs := make([]string, 0, len(usedPortsByIP))
 	for ip := range usedPortsByIP {
 		usedIPs = append(usedIPs, ip)
@@ -51,26 +51,25 @@ func (m *Manager) buildPrioritizedIPPool(fullPool []string, usedPortsByIP map[st
 	return append(usedIPs, unusedIPs...)
 }
 
-// findBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
-func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
+// FindBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
+func FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	fullIPPool, err := m.getMetalLBIPPool(ctx)
+	fullIPPool, err := GetMetalLBIPPool(ctx)
 	if err != nil {
 		return "", nil, err
 	}
 
-	// NEW LOGIC: Build a prioritized IP pool to check used IPs first.
-	prioritizedIPPool := m.buildPrioritizedIPPool(fullIPPool, usedPortsByIP)
+	prioritizedIPPool := BuildPrioritizedIPPool(fullIPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
 	// Check if a service already exists for this instance and try to reuse its IP.
-	svcName := m.serviceName(instance)
+	svcName := forge.LoadBalancerServiceName(instance)
 	existingSvc := &v1.Service{}
-	err = m.Get(ctx, types.NamespacedName{Name: svcName, Namespace: instance.Namespace}, existingSvc)
+	err = c.Get(ctx, types.NamespacedName{Name: svcName, Namespace: instance.Namespace}, existingSvc)
 	if err == nil {
 		var preferredIP string
-		if ip, ok := existingSvc.Annotations[MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {
+		if ip, ok := existingSvc.Annotations[forge.MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {
 			preferredIP = ip
 		} else if len(existingSvc.Status.LoadBalancer.Ingress) > 0 {
 			preferredIP = existingSvc.Status.LoadBalancer.Ingress[0].IP
@@ -81,7 +80,6 @@ func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1al
 			found := false
 			for i, ip := range prioritizedIPPool {
 				if ip == preferredIP {
-					// Swap with the first element
 					prioritizedIPPool[0], prioritizedIPPool[i] = prioritizedIPPool[i], prioritizedIPPool[0]
 					found = true
 					break
@@ -141,7 +139,7 @@ func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1al
 		allAutoPortsAssignable := true
 		for _, port := range autoPorts {
 			assignedPort := int32(0)
-			for p := int32(BasePortForAutomaticAssignment); p <= 32767; p++ {
+			for p := int32(forge.BasePortForAutomaticAssignment); p <= 32767; p++ {
 				if !simulatedPortsInUse[p] {
 					assignedPort = p
 					simulatedPortsInUse[p] = true // Simulate port assignment.
@@ -170,22 +168,21 @@ func (m *Manager) findBestIPAndAssignPorts(ctx context.Context, instance *clv1al
 	return "", nil, fmt.Errorf("no available IP can support all requested ports")
 }
 
-// updateUsedPortsByIP scans LoadBalancer services with the specific public-exposure label
+// UpdateUsedPortsByIP scans LoadBalancer services with the specific public-exposure label
 // to build a map of used ports per IP.
-func (m *Manager) updateUsedPortsByIP(ctx context.Context, excludeSvcName, excludeSvcNs string) (map[string]map[int32]bool, error) {
+func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, excludeSvcNs string) (map[string]map[int32]bool, error) {
 	usedPortsByIP := make(map[string]map[int32]bool)
 	logger := log.FromContext(ctx)
 
 	svcList := &v1.ServiceList{}
 
 	// Use a label selector to list only the relevant services.
+	labels := forge.LoadBalancerServiceLabels()
 	listOptions := []client.ListOption{
-		client.MatchingLabels{
-			PublicExposureComponentLabelKey: PublicExposureComponentLabelValue,
-		},
+		client.MatchingLabels(labels),
 	}
 
-	if err := m.List(ctx, svcList, listOptions...); err != nil {
+	if err := c.List(ctx, svcList, listOptions...); err != nil {
 		return nil, fmt.Errorf("failed to list public exposure services: %w", err)
 	}
 
@@ -202,7 +199,7 @@ func (m *Manager) updateUsedPortsByIP(ctx context.Context, excludeSvcName, exclu
 
 		var externalIP string
 		// Prefer the annotation as it's the desired state.
-		if ip, ok := svc.Annotations[MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {
+		if ip, ok := svc.Annotations[forge.MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {
 			externalIP = ip
 		} else if len(svc.Status.LoadBalancer.Ingress) > 0 {
 			externalIP = svc.Status.LoadBalancer.Ingress[0].IP
