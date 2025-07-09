@@ -77,7 +77,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	}
 
 	// 2. Find the best IP and ports to assign using the logic from ip_manager.go
-	targetIP, assignedPorts, err := FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
+	targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
 	if err != nil {
 		log.Error(err, "failed to assign IP and ports for public exposure")
 		return err

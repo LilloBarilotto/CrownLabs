@@ -15,19 +15,14 @@ import (
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"
 )
 
-// GetMetalLBIPPool retrieves the IP pool configured in MetalLB.
-func GetMetalLBIPPool(_ context.Context) ([]string, error) {
-	// For now, this returns a static pool. This should be made configurable.
-	return []string{
-		"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243",
-		"172.18.0.244", "172.18.0.245", "172.18.0.246", "172.18.0.247",
-		"172.18.0.248", "172.18.0.249", "172.18.0.250",
-	}, nil
+// GetMetalLBIPPool retrieves the IP pool configured for public exposure.
+func (r *InstanceReconciler) GetMetalLBIPPool(_ context.Context) ([]string, error) {
+	return r.PublicExposureIPPool, nil
 }
 
 // BuildPrioritizedIPPool creates a sorted IP pool, prioritizing IPs that are already in use.
 // This encourages IP reuse and reduces IP fragmentation.
-func BuildPrioritizedIPPool(fullPool []string, usedPortsByIP map[string]map[int32]bool) []string {
+func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPortsByIP map[string]map[int32]bool) []string {
 	usedIPs := make([]string, 0, len(usedPortsByIP))
 	for ip := range usedPortsByIP {
 		usedIPs = append(usedIPs, ip)
@@ -52,15 +47,15 @@ func BuildPrioritizedIPPool(fullPool []string, usedPortsByIP map[string]map[int3
 }
 
 // FindBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
-func FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
+func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	fullIPPool, err := GetMetalLBIPPool(ctx)
+	fullIPPool, err := r.GetMetalLBIPPool(ctx)
 	if err != nil {
 		return "", nil, err
 	}
 
-	prioritizedIPPool := BuildPrioritizedIPPool(fullIPPool, usedPortsByIP)
+	prioritizedIPPool := r.BuildPrioritizedIPPool(fullIPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
 	// Check if a service already exists for this instance and try to reuse its IP.
