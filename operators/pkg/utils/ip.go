@@ -9,6 +9,7 @@ import (
 // ParseIPPool parses a comma-separated list of IPs, CIDRs, or ranges into a slice of IP strings.
 func ParseIPPool(env string) ([]string, error) {
 	var ips []string
+	seen := make(map[string]bool)
 	for _, entry := range strings.Split(env, ",") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
@@ -21,7 +22,11 @@ func ParseIPPool(env string) ([]string, error) {
 				return nil, err
 			}
 			for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); incIP(ip) {
-				ips = append(ips, ip.String())
+				ipStr := ip.String()
+				if !seen[ipStr] {
+					ips = append(ips, ipStr)
+					seen[ipStr] = true
+				}
 			}
 			continue
 		}
@@ -37,13 +42,21 @@ func ParseIPPool(env string) ([]string, error) {
 				return nil, fmt.Errorf("invalid IP in range: %s", entry)
 			}
 			for ip := start; !ipAfter(ip, end); incIP(ip) {
-				ips = append(ips, ip.String())
+				ipStr := ip.String()
+				if !seen[ipStr] {
+					ips = append(ips, ipStr)
+					seen[ipStr] = true
+				}
 			}
 			continue
 		}
 		// Single IP
 		if net.ParseIP(entry) != nil {
-			ips = append(ips, entry)
+			ipStr := entry
+			if !seen[ipStr] {
+				ips = append(ips, ipStr)
+				seen[ipStr] = true
+			}
 			continue
 		}
 		return nil, fmt.Errorf("invalid IP entry: %s", entry)
