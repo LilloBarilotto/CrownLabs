@@ -18,8 +18,10 @@ import (
 // EnforcePublicExposure ensures the presence or absence of the LoadBalancer service for public exposure.
 func (r *InstanceReconciler) EnforcePublicExposure(ctx context.Context) error {
 	instance := clctx.InstanceFrom(ctx)
+	template := clctx.TemplateFrom(ctx)
 
-	if instance.Spec.Running && instance.Spec.PublicExposure != nil && len(instance.Spec.PublicExposure.Ports) > 0 {
+	if template.Spec.AllowPublicExposure &&
+		instance.Spec.Running && instance.Spec.PublicExposure != nil && len(instance.Spec.PublicExposure.Ports) > 0 {
 		return r.enforcePublicExposurePresence(ctx)
 	}
 	return r.enforcePublicExposureAbsence(ctx)
