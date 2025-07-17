@@ -97,11 +97,11 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 
 		// Set annotations
 		if service.Annotations == nil {
-			service.Annotations = forge.LoadBalancerServiceAnnotations(instance, targetIP)
+			service.Annotations = forge.LoadBalancerServiceAnnotations(targetIP)
 		}
 
 		// Set spec
-		service.Spec = forge.LoadBalancerServiceSpec(instance, assignedPorts, targetIP)
+		service.Spec = forge.LoadBalancerServiceSpec(instance, assignedPorts)
 
 		return nil
 	})

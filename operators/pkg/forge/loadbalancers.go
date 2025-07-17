@@ -1,3 +1,17 @@
+// Copyright 2020-2025 Politecnico di Torino
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package forge
 
 import (
@@ -7,6 +21,7 @@ import (
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 )
 
+// Metallb annotations, values, and labels for LoadBalancer services related to public exposure.
 const (
 	MetallbAddressPoolAnnotation     = "metallb.universe.tf/address-pool"
 	MetallbAllowSharedIPAnnotation   = "metallb.universe.tf/allow-shared-ip"
@@ -19,7 +34,7 @@ const (
 )
 
 // LoadBalancerServiceSpec forges the spec for a LoadBalancer service for public exposure.
-func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.PublicServicePort, externalIP string) v1.ServiceSpec {
+func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.PublicServicePort) v1.ServiceSpec {
 	svcPorts := make([]v1.ServicePort, len(ports))
 	for i, p := range ports {
 		svcPorts[i] = v1.ServicePort{
@@ -37,7 +52,7 @@ func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.P
 }
 
 // LoadBalancerServiceAnnotations forges the annotations for a LoadBalancer service.
-func LoadBalancerServiceAnnotations(instance *clv1alpha2.Instance, externalIP string) map[string]string {
+func LoadBalancerServiceAnnotations(externalIP string) map[string]string {
 
 	annotations := map[string]string{
 		MetallbAddressPoolAnnotation:     DefaultAddressPool,

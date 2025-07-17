@@ -1,3 +1,17 @@
+// Copyright 2020-2025 Politecnico di Torino
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package instctrl
 
 import (
@@ -9,7 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"
@@ -167,7 +180,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 // to build a map of used ports per IP.
 func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, excludeSvcNs string) (map[string]map[int32]bool, error) {
 	usedPortsByIP := make(map[string]map[int32]bool)
-	logger := log.FromContext(ctx)
+	log := ctrl.LoggerFrom(ctx)
 
 	svcList := &v1.ServiceList{}
 
@@ -181,7 +194,8 @@ func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, e
 		return nil, fmt.Errorf("failed to list public exposure services: %w", err)
 	}
 
-	for _, svc := range svcList.Items {
+	for i := range svcList.Items {
+		svc := &svcList.Items[i]
 		// The check for ServiceType is still a good practice, although the label should be enough.
 		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 			continue
@@ -210,7 +224,7 @@ func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, e
 
 		for _, port := range svc.Spec.Ports {
 			usedPortsByIP[externalIP][port.Port] = true
-			logger.V(1).Info("Port marked as in use", "ip", externalIP, "port", port.Port, "service", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
+			log.V(1).Info("Port marked as in use", "ip", externalIP, "port", port.Port, "service", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 		}
 	}
 
