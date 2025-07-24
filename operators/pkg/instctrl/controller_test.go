@@ -474,7 +474,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 				environment.EnvironmentType = clv1alpha2.ClassContainer
 
 				// Initialize PublicExposureIPPool in the reconciler
-				instanceReconciler.PublicExposureIPPool = []string{"172.18.0.240", "172.18.0.241"}
+				instanceReconciler.PublicExposureIPPool = []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243", "172.18.0.244", "172.18.0.245"}
 			})
 
 			JustBeforeEach(func() {
@@ -613,7 +613,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 				runInstance = true
 				environment.EnvironmentType = clv1alpha2.ClassContainer
 
-				instanceReconciler.PublicExposureIPPool = []string{"172.18.0.242"}
+				instanceReconciler.PublicExposureIPPool = []string{"172.18.0.246", "172.18.0.247", "172.18.0.248", "172.18.0.249"}
 			})
 
 			It("Should remove LoadBalancer service when public exposure is disabled", func() {
