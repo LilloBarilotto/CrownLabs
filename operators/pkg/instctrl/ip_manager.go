@@ -62,9 +62,11 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
 	// Check if a service already exists for this instance and try to reuse its IP.
-	svcName := forge.LoadBalancerServiceName(instance)
-	existingSvc := &v1.Service{}
-	err := c.Get(ctx, types.NamespacedName{Name: svcName, Namespace: instance.Namespace}, existingSvc)
+	existingSvc := &v1.Service{
+		ObjectMeta: forge.ObjectMetaWithSuffix(instance, "public-exposure"),
+	}
+
+	err := c.Get(ctx, types.NamespacedName{Name: existingSvc.Name, Namespace: instance.Namespace}, existingSvc)
 	if err == nil {
 		var preferredIP string
 		if ip, ok := existingSvc.Annotations[forge.MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {

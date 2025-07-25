@@ -32,13 +32,12 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	log := ctrl.LoggerFrom(ctx)
 	instance := clctx.InstanceFrom(ctx)
 
-	svcName := forge.LoadBalancerServiceName(instance)
-	service := &v1.Service{}
-	service.SetName(svcName)
-	service.SetNamespace(instance.Namespace)
+	service := &v1.Service{
+		ObjectMeta: forge.ObjectMetaWithSuffix(instance, "public-exposure"),
+	}
 
 	// Try to get the existing service
-	err := r.Client.Get(ctx, client.ObjectKey{Name: svcName, Namespace: instance.Namespace}, service)
+	err := r.Client.Get(ctx, client.ObjectKey{Name: service.Name, Namespace: instance.Namespace}, service)
 	serviceExists := err == nil
 
 	// If the service exists, check if its current spec matches the desired spec
@@ -70,7 +69,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	}
 
 	// 1. Retrieve the map of used ports by other LoadBalancer services
-	usedPortsByIP, err := UpdateUsedPortsByIP(ctx, r.Client, svcName, instance.Namespace)
+	usedPortsByIP, err := UpdateUsedPortsByIP(ctx, r.Client, service.Name, instance.Namespace)
 	if err != nil {
 		log.Error(err, "failed to get used ports by IP")
 		return err
@@ -128,10 +127,9 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 // enforcePublicExposureAbsence ensures the absence of the LoadBalancer service.
 func (r *InstanceReconciler) enforcePublicExposureAbsence(ctx context.Context) error {
 	instance := clctx.InstanceFrom(ctx)
-	svcName := forge.LoadBalancerServiceName(instance)
-	service := &v1.Service{}
-	service.SetName(svcName)
-	service.SetNamespace(instance.Namespace)
+	service := &v1.Service{
+		ObjectMeta: forge.ObjectMetaWithSuffix(instance, "public-exposure"),
+	}
 
 	// Remove the service if it exists
 	if err := utils.EnforceObjectAbsence(ctx, r.Client, service, "service"); err != nil {
