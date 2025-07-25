@@ -53,7 +53,6 @@ func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.P
 
 // LoadBalancerServiceAnnotations forges the annotations for a LoadBalancer service.
 func LoadBalancerServiceAnnotations(externalIP string) map[string]string {
-
 	annotations := map[string]string{
 		MetallbAddressPoolAnnotation:     DefaultAddressPool,
 		MetallbAllowSharedIPAnnotation:   AllowSharedIPValue,
