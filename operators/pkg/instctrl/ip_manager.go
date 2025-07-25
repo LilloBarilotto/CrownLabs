@@ -28,11 +28,6 @@ import (
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"
 )
 
-// GetMetalLBIPPool retrieves the IP pool configured for public exposure.
-func (r *InstanceReconciler) GetMetalLBIPPool(_ context.Context) ([]string, error) {
-	return r.PublicExposureIPPool, nil
-}
-
 // BuildPrioritizedIPPool creates a sorted IP pool, prioritizing IPs that are already in use.
 // This encourages IP reuse and reduces IP fragmentation.
 func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPortsByIP map[string]map[int32]bool) []string {
@@ -63,18 +58,13 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	fullIPPool, err := r.GetMetalLBIPPool(ctx)
-	if err != nil {
-		return "", nil, err
-	}
-
-	prioritizedIPPool := r.BuildPrioritizedIPPool(fullIPPool, usedPortsByIP)
+	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureIPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
 	// Check if a service already exists for this instance and try to reuse its IP.
 	svcName := forge.LoadBalancerServiceName(instance)
 	existingSvc := &v1.Service{}
-	err = c.Get(ctx, types.NamespacedName{Name: svcName, Namespace: instance.Namespace}, existingSvc)
+	err := c.Get(ctx, types.NamespacedName{Name: svcName, Namespace: instance.Namespace}, existingSvc)
 	if err == nil {
 		var preferredIP string
 		if ip, ok := existingSvc.Annotations[forge.MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {
