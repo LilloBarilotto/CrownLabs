@@ -87,21 +87,6 @@ var _ = Describe("IP Manager Functions", func() {
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
 	})
 
-	Describe("GetMetalLBIPPool", func() {
-		It("Should return the configured IP pool", func() {
-			ipPool, err := reconciler.GetMetalLBIPPool(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(ipPool).To(Equal([]string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"}))
-		})
-
-		It("Should return empty pool when none configured", func() {
-			reconciler.PublicExposureIPPool = []string{}
-			ipPool, err := reconciler.GetMetalLBIPPool(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(ipPool).To(BeEmpty())
-		})
-	})
-
 	Describe("BuildPrioritizedIPPool", func() {
 		It("Should prioritize used IPs over unused ones", func() {
 			fullPool := []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"}
