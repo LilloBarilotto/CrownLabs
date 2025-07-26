@@ -16,9 +16,9 @@ package instctrl_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
-	"time"
+	"math/big"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -44,10 +44,41 @@ var _ = Describe("Public Exposure Functions", func() {
 		namespace  string
 	)
 
+	// Helper function to create a test LoadBalancer service
+	createTestLoadBalancerService := func() {
+		svcName := forge.LoadBalancerServiceName(instance)
+		existingService := &v1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      svcName,
+				Namespace: namespace,
+				Labels:    forge.LoadBalancerServiceLabels(),
+			},
+			Spec: v1.ServiceSpec{
+				Type: v1.ServiceTypeLoadBalancer,
+				Ports: []v1.ServicePort{
+					{
+						Name:       "http",
+						Port:       8080,
+						TargetPort: intstr.FromInt(80),
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, existingService)).To(Succeed())
+	}
+
+	// Helper function to verify that a LoadBalancer service was removed
+	expectServiceRemoved := func() {
+		svcName := forge.LoadBalancerServiceName(instance)
+		service := &v1.Service{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
+		Expect(err).To(HaveOccurred())
+	}
+
 	BeforeEach(func() {
 		// Generate unique namespace name to avoid conflicts
-		rand.Seed(time.Now().UnixNano())
-		namespace = fmt.Sprintf("test-namespace-%d", rand.Intn(100000))
+		randomNum, _ := rand.Int(rand.Reader, big.NewInt(100000))
+		namespace = fmt.Sprintf("test-namespace-%d", randomNum.Int64())
 		reconciler = &instctrl.InstanceReconciler{
 			Client:               k8sClient,
 			Scheme:               k8sClient.Scheme(),
@@ -316,25 +347,7 @@ var _ = Describe("Public Exposure Functions", func() {
 
 			It("Should remove service when instance is not running", func() {
 				// Create existing service
-				svcName := forge.LoadBalancerServiceName(instance)
-				existingService := &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      svcName,
-						Namespace: namespace,
-						Labels:    forge.LoadBalancerServiceLabels(),
-					},
-					Spec: v1.ServiceSpec{
-						Type: v1.ServiceTypeLoadBalancer,
-						Ports: []v1.ServicePort{
-							{
-								Name:       "http",
-								Port:       8080,
-								TargetPort: intstr.FromInt(80),
-							},
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, existingService)).To(Succeed())
+				createTestLoadBalancerService()
 
 				// Update instance to not running
 				instance.Spec.Running = false
@@ -345,32 +358,12 @@ var _ = Describe("Public Exposure Functions", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify service was removed
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).To(HaveOccurred())
+				expectServiceRemoved()
 			})
 
 			It("Should remove service when public exposure is nil", func() {
 				// Create existing service
-				svcName := forge.LoadBalancerServiceName(instance)
-				existingService := &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      svcName,
-						Namespace: namespace,
-						Labels:    forge.LoadBalancerServiceLabels(),
-					},
-					Spec: v1.ServiceSpec{
-						Type: v1.ServiceTypeLoadBalancer,
-						Ports: []v1.ServicePort{
-							{
-								Name:       "http",
-								Port:       8080,
-								TargetPort: intstr.FromInt(80),
-							},
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, existingService)).To(Succeed())
+				createTestLoadBalancerService()
 
 				// Update instance to remove public exposure
 				instance.Spec.PublicExposure = nil
@@ -381,32 +374,12 @@ var _ = Describe("Public Exposure Functions", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify service was removed
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).To(HaveOccurred())
+				expectServiceRemoved()
 			})
 
 			It("Should remove service when no ports are specified", func() {
 				// Create existing service
-				svcName := forge.LoadBalancerServiceName(instance)
-				existingService := &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      svcName,
-						Namespace: namespace,
-						Labels:    forge.LoadBalancerServiceLabels(),
-					},
-					Spec: v1.ServiceSpec{
-						Type: v1.ServiceTypeLoadBalancer,
-						Ports: []v1.ServicePort{
-							{
-								Name:       "http",
-								Port:       8080,
-								TargetPort: intstr.FromInt(80),
-							},
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, existingService)).To(Succeed())
+				createTestLoadBalancerService()
 
 				// Update instance to have empty ports
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{}
@@ -417,9 +390,7 @@ var _ = Describe("Public Exposure Functions", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify service was removed
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).To(HaveOccurred())
+				expectServiceRemoved()
 			})
 		})
 
