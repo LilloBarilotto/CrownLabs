@@ -16,9 +16,9 @@ package instctrl_test
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
-	"math/rand"
-	"time"
+	"math/big"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -42,8 +42,8 @@ var _ = Describe("IP Manager Functions", func() {
 
 	BeforeEach(func() {
 		// Generate unique namespace name to avoid conflicts
-		rand.Seed(time.Now().UnixNano())
-		namespace = fmt.Sprintf("test-namespace-%d", rand.Intn(100000))
+		randomNum, _ := rand.Int(rand.Reader, big.NewInt(100000))
+		namespace = fmt.Sprintf("test-namespace-%d", randomNum.Int64())
 		reconciler = &instctrl.InstanceReconciler{
 			Client:               k8sClient,
 			Scheme:               k8sClient.Scheme(),
