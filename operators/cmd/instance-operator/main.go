@@ -17,7 +17,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -132,7 +131,7 @@ func main() {
 		log.Error(err, "Invalid public exposure IP pool")
 		os.Exit(1)
 	}
-	fmt.Printf("PublicExposureIPPool: %#v\n", ipPool)
+	log.Info("PublicExposureIPPool", ipPool)
 
 	// Configure the Instance controller
 	const instanceCtrlName = "Instance"
