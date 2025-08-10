@@ -188,7 +188,7 @@ spec:
             description: InstanceStatus reflects the most recently observed status
               of the Instance.
             properties:
-              automation:
+              automation:Evita i due “:” finali quando i tag sono vuoti (image e container-export-img), altrimenti alcuni runtime non risolvono l’immagine.
                 description: Timestamps of the Instance automation phases (check,
                   termination and submission).
                 properties:

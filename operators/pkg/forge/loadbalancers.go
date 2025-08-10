@@ -26,12 +26,21 @@ const (
 	MetallbAddressPoolAnnotation     = "metallb.universe.tf/address-pool"
 	MetallbAllowSharedIPAnnotation   = "metallb.universe.tf/allow-shared-ip"
 	MetallbLoadBalancerIPsAnnotation = "metallb.universe.tf/loadBalancerIPs"
-	DefaultAddressPool               = "my-ip-pool"
 	AllowSharedIPValue               = "true"
 	BasePortForAutomaticAssignment   = 30000
 
 	labelPublicExposureValue = "public-exposure"
 )
+
+// Default value, can be overwritten by the args passed to the operator.
+var DefaultAddressPool = "public-exposure-ip-pool"
+
+// SetDefaultAddressPool sets the default address pool.
+func SetDefaultAddressPool(v string) {
+	if v != "" {
+		DefaultAddressPool = v
+	}
+}
 
 // LoadBalancerServiceSpec forges the spec for a LoadBalancer service for public exposure.
 func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.PublicServicePort) v1.ServiceSpec {
