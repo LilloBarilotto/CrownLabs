@@ -15,6 +15,9 @@
 package forge
 
 import (
+	"fmt"
+	"strings"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -23,23 +26,33 @@ import (
 
 // Metallb annotations, values, and labels for LoadBalancer services related to public exposure.
 const (
-	MetallbAddressPoolAnnotation     = "metallb.universe.tf/address-pool"
-	MetallbAllowSharedIPAnnotation   = "metallb.universe.tf/allow-shared-ip"
-	MetallbLoadBalancerIPsAnnotation = "metallb.universe.tf/loadBalancerIPs"
-	AllowSharedIPValue               = "true"
-	BasePortForAutomaticAssignment   = 30000
-
-	labelPublicExposureValue = "public-exposure"
+	AllowSharedIPValue             = "true"
+	BasePortForAutomaticAssignment = 49152
+	labelPublicExposureValue       = "pe"
 )
 
-// Default value, can be overwritten by the args passed to the operator.
-var DefaultAddressPool = "public-exposure-ip-pool"
+var (
+	allowSharedIPAnnotationKey   = "metallb.universe.tf/shared-ip"
+	loadBalancerIPsAnnotationKey = "metallb.universe.tf/loadBalancerIPs"
 
-// SetDefaultAddressPool sets the default address pool.
-func SetDefaultAddressPool(v string) {
-	if v != "" {
-		DefaultAddressPool = v
+	// Cilium SharedIpAnnotation | lbipam.cilium.io/sharing-key = "public-exposure"
+	// Cilium SharedIpAcrossNamespace | lbipam.cilium.io/sharing-cross-namespace = "*"
+	// Cilium LoadBalancerIPsAnnotation | lbipam.cilium.io/ips
+
+	// MetalLB SharedIpAnnotation | metallb.universe.tf/shared-ip = "public-exposure"
+	// MetalLB LoadBalancerIPsAnnotation | metallb.universe.tf/loadBalancerIPs
+)
+
+func ConfigureLoadBalancerAnnotationKeys(raw string) (string, string, error) {
+	parts := strings.SplitN(raw, ",", -1)
+	if len(parts) < 2 {
+		return "", "", fmt.Errorf("invalid annotation format")
 	}
+	sharedKey := strings.TrimSpace(parts[0])
+	ipKey := strings.TrimSpace(parts[1])
+	// Based on MetalLB, in case of multiple annotation keys, like Cilium with the SharedIpAcrossNamespace, add LoC
+
+	return sharedKey, ipKey, nil
 }
 
 // LoadBalancerServiceSpec forges the spec for a LoadBalancer service for public exposure.
@@ -63,9 +76,8 @@ func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.P
 // LoadBalancerServiceAnnotations forges the annotations for a LoadBalancer service.
 func LoadBalancerServiceAnnotations(externalIP string) map[string]string {
 	annotations := map[string]string{
-		MetallbAddressPoolAnnotation:     DefaultAddressPool,
-		MetallbAllowSharedIPAnnotation:   AllowSharedIPValue,
-		MetallbLoadBalancerIPsAnnotation: externalIP,
+		allowSharedIPAnnotationKey:   AllowSharedIPValue,
+		loadBalancerIPsAnnotationKey: externalIP,
 	}
 
 	return annotations

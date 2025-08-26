@@ -37,7 +37,10 @@ configurations:
     ipPool:
       - 172.18.0.240-172.18.0.249
       - 172.18.0.250/30
-    addressPool: "public-exposure-ip-pool"  
+    annotationKeys:
+      - "metallb.universe.tf/shared-ip"
+      - "metallb.universe.tf/loadBalancerIPs"
+      
 
 image:
   repository: crownlabs/instance-operator

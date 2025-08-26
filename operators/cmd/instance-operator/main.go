@@ -64,7 +64,7 @@ func main() {
 	svcUrls := instctrl.ServiceUrls{}
 	instSnapOpts := instancesnapshot_controller.ContainersSnapshotOpts{}
 	publicExposureIPPoolRaw := ""
-	publicExposureAddressPool := ""
+	publicExposureAnnotationKeysRaw := ""
 
 	metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	enableLeaderElection := flag.Bool("enable-leader-election", false,
@@ -98,8 +98,8 @@ func main() {
 	flag.StringVar(&instSnapOpts.ContainerImgExport, "container-export-img", "crownlabs/img-exporter", "The image for the img-exporter (container in charge of exporting the disk of a persistent vm)")
 	flag.StringVar(&instSnapOpts.ContainerKaniko, "container-kaniko-img", "gcr.io/kaniko-project/executor", "The image for the Kaniko container to be deployed")
 
-	flag.StringVar(&publicExposureAddressPool, "public-exposure-address-pool", "", "MetalLB address pool name for public exposure Services")
 	flag.StringVar(&publicExposureIPPoolRaw, "public-exposure-ip-pool", "", "Comma-separated list of IPs, ranges or CIDRs for public exposure")
+	flag.StringVar(&publicExposureAnnotationKeysRaw, "public-exposure-annotation-keys", "", "Comma-separated list of annotation keys for public exposure")
 
 	restcfg.InitFlags(nil)
 	klog.InitFlags(nil)
@@ -128,6 +128,7 @@ func main() {
 
 	nsWhitelist := metav1.LabelSelector{MatchLabels: whiteListMap, MatchExpressions: []metav1.LabelSelectorRequirement{}}
 
+	// Configure the public exposure IP pool
 	ipPool, err := utils.ParseIPPool(publicExposureIPPoolRaw)
 	if err != nil {
 		log.Error(err, "Invalid public exposure IP pool")
@@ -135,8 +136,13 @@ func main() {
 	}
 	log.Info("PublicExposureIPPool", ipPool)
 
-	forge.SetDefaultAddressPool(publicExposureAddressPool)
-	log.Info("Using address pool for public exposure", "pool", publicExposureAddressPool)
+	// Configure annotation keys for public exposure using the flag value.
+	sharedKey, ipsKey, err := forge.ConfigureLoadBalancerAnnotationKeys(publicExposureAnnotationKeysRaw)
+	if err != nil {
+		log.Error(err, "Invalid public exposure annotation keys")
+		os.Exit(1)
+	}
+	log.Info("Configured public exposure annotation keys", "sharedIPKey", sharedKey, "lbIPsKey", ipsKey)
 
 	// Configure the Instance controller
 	const instanceCtrlName = "Instance"
