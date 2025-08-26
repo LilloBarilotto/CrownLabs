@@ -28,7 +28,7 @@ import (
 const (
 	AllowSharedIPValue             = "true"
 	BasePortForAutomaticAssignment = 49152
-	labelPublicExposureValue       = "pe"
+	LabelPublicExposureValue       = "pe"
 )
 
 var (
@@ -86,7 +86,7 @@ func LoadBalancerServiceAnnotations(externalIP string) map[string]string {
 // LoadBalancerServiceLabels forges the labels for a LoadBalancer service.
 func LoadBalancerServiceLabels() map[string]string {
 	labels := map[string]string{
-		labelComponentKey: labelPublicExposureValue,
+		labelComponentKey: LabelPublicExposureValue,
 	}
 
 	return labels
@@ -94,5 +94,5 @@ func LoadBalancerServiceLabels() map[string]string {
 
 // LoadBalancerServiceName forges the name for a LoadBalancer service based on the instance name.
 func LoadBalancerServiceName(instance *clv1alpha2.Instance) string {
-	return instance.Name + "-" + labelPublicExposureValue
+	return instance.Name + "-" + LabelPublicExposureValue
 }

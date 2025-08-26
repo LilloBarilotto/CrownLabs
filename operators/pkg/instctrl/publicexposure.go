@@ -47,7 +47,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	instance := clctx.InstanceFrom(ctx)
 
 	service := &v1.Service{
-		ObjectMeta: forge.ObjectMetaWithSuffix(instance, "public-exposure"),
+		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
 	}
 
 	// Try to get the existing service
@@ -69,6 +69,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 
 		// If the current IP and ports match the desired, skip update
 		if reflect.DeepEqual(desiredPorts, currentPorts) && currentIP != "" {
+			log.Info("Service already matches desired state, skipping update")
 			// Also update status if needed
 			newStatus := &clv1alpha2.InstancePublicExposureStatus{
 				ExternalIP: currentIP,
@@ -88,6 +89,8 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		log.Error(err, "failed to get used ports by IP")
 		return err
 	}
+
+	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseProvisioning
 
 	// 2. Find the best IP and ports to assign using the logic from ip_manager.go
 	targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
@@ -111,6 +114,8 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		// Set annotations
 		if service.Annotations == nil {
 			service.Annotations = forge.LoadBalancerServiceAnnotations(targetIP)
+		} else {
+			service.Annotations[forge.LoadBalancerIPsAnnotationKey] = targetIP
 		}
 
 		// Set spec
@@ -121,6 +126,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 
 	if err != nil {
 		log.Error(err, "failed to create or update LoadBalancer service", "service", service.GetName())
+		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
 		return err
 	}
 	log.V(utils.FromResult(op)).Info("LoadBalancer service enforced", "service", service.GetName(), "result", op)
@@ -142,7 +148,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 func (r *InstanceReconciler) enforcePublicExposureAbsence(ctx context.Context) error {
 	instance := clctx.InstanceFrom(ctx)
 	service := &v1.Service{
-		ObjectMeta: forge.ObjectMetaWithSuffix(instance, "public-exposure"),
+		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
 	}
 
 	// Remove the service if it exists

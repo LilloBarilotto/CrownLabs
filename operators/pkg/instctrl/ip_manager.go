@@ -63,7 +63,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 
 	// Check if a service already exists for this instance and try to reuse its IP.
 	existingSvc := &v1.Service{
-		ObjectMeta: forge.ObjectMetaWithSuffix(instance, "public-exposure"),
+		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
 	}
 
 	err := c.Get(ctx, types.NamespacedName{Name: existingSvc.Name, Namespace: instance.Namespace}, existingSvc)
@@ -76,6 +76,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 		}
 
 		if preferredIP != "" {
+			log.Info("Found preferred IP from existing service", "ip", preferredIP)
 			// Move the preferred IP to the front of the pool to try it first.
 			found := false
 			for i, ip := range prioritizedIPPool {
@@ -100,6 +101,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 			autoPorts = append(autoPorts, svcPort)
 		}
 	}
+	log.Info("Port classification", "specifiedPorts", len(specifiedPorts), "autoPorts", len(autoPorts))
 
 	// Iterate over each available IP in the prioritized pool.
 	for _, ip := range prioritizedIPPool {
@@ -139,7 +141,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 		allAutoPortsAssignable := true
 		for _, port := range autoPorts {
 			assignedPort := int32(0)
-			for p := int32(forge.BasePortForAutomaticAssignment); p <= 32767; p++ {
+			for p := int32(forge.BasePortForAutomaticAssignment); p <= 65535; p++ {
 				if !simulatedPortsInUse[p] {
 					assignedPort = p
 					simulatedPortsInUse[p] = true // Simulate port assignment.
@@ -160,11 +162,13 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 
 		// 3. If all ports are assignable, this is the best IP.
 		if allAutoPortsAssignable {
-			log.Info("Found compatible IP and assigned all ports", "ip", ip, "ports", tempAssignedPorts)
+			log.Info("SUCCESS: Found compatible IP", "ip", ip, "assignedPorts", tempAssignedPorts)
 			return ip, tempAssignedPorts, nil
 		}
+		log.Info("IP rejected due to auto port failure", "ip", ip)
 	}
 
+	log.Info("FAILURE: No compatible IP found", "totalIPs", len(prioritizedIPPool))
 	return "", nil, fmt.Errorf("no available IP can support all requested ports")
 }
 

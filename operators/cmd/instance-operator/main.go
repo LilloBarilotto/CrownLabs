@@ -134,7 +134,7 @@ func main() {
 		log.Error(err, "Invalid public exposure IP pool")
 		os.Exit(1)
 	}
-	log.Info("PublicExposureIPPool", ipPool)
+	log.Info("PublicExposureIPPool", "pool", ipPool)
 
 	// Configure annotation keys for public exposure using the flag value.
 	sharedKey, ipsKey, err := forge.ConfigureLoadBalancerAnnotationKeys(publicExposureAnnotationKeysRaw)

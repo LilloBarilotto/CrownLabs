@@ -196,7 +196,7 @@ var _ = Describe("LoadBalancers forging", func() {
 			It("Should set the correct component label", func() {
 				Expect(labels).To(HaveKeyWithValue(
 					"crownlabs.polito.it/component",
-					"public-exposure",
+					"pe",
 				))
 			})
 
