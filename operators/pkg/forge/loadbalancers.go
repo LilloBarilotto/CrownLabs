@@ -32,8 +32,8 @@ const (
 )
 
 var (
-	allowSharedIPAnnotationKey   = "metallb.universe.tf/shared-ip"
-	loadBalancerIPsAnnotationKey = "metallb.universe.tf/loadBalancerIPs"
+	AllowSharedIPAnnotationKey   = "metallb.universe.tf/shared-ip"
+	LoadBalancerIPsAnnotationKey = "metallb.universe.tf/loadBalancerIPs"
 
 	// Cilium SharedIpAnnotation | lbipam.cilium.io/sharing-key = "public-exposure"
 	// Cilium SharedIpAcrossNamespace | lbipam.cilium.io/sharing-cross-namespace = "*"
@@ -76,8 +76,8 @@ func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.P
 // LoadBalancerServiceAnnotations forges the annotations for a LoadBalancer service.
 func LoadBalancerServiceAnnotations(externalIP string) map[string]string {
 	annotations := map[string]string{
-		allowSharedIPAnnotationKey:   AllowSharedIPValue,
-		loadBalancerIPsAnnotationKey: externalIP,
+		AllowSharedIPAnnotationKey:   AllowSharedIPValue,
+		LoadBalancerIPsAnnotationKey: externalIP,
 	}
 
 	return annotations

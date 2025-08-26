@@ -228,7 +228,7 @@ var _ = Describe("IP Manager Functions", func() {
 						Name:      forge.LoadBalancerServiceName(instance),
 						Namespace: namespace,
 						Annotations: map[string]string{
-							forge.MetallbLoadBalancerIPsAnnotation: "172.18.0.242",
+							forge.LoadBalancerIPsAnnotationKey: "172.18.0.242",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -299,7 +299,7 @@ var _ = Describe("IP Manager Functions", func() {
 					Namespace: namespace,
 					Labels:    forge.LoadBalancerServiceLabels(),
 					Annotations: map[string]string{
-						forge.MetallbLoadBalancerIPsAnnotation: "172.18.0.240",
+						forge.LoadBalancerIPsAnnotationKey: "172.18.0.240",
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -361,7 +361,7 @@ var _ = Describe("IP Manager Functions", func() {
 					Namespace: namespace,
 					Labels:    forge.LoadBalancerServiceLabels(),
 					Annotations: map[string]string{
-						forge.MetallbLoadBalancerIPsAnnotation: uniqueIP,
+						forge.LoadBalancerIPsAnnotationKey: uniqueIP,
 					},
 				},
 				Spec: v1.ServiceSpec{

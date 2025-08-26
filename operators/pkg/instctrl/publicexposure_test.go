@@ -180,8 +180,8 @@ var _ = Describe("Public Exposure Functions", func() {
 				Expect(service.Spec.Ports[0].TargetPort).To(Equal(intstr.FromInt32(80)))
 
 				// Verify annotations
-				Expect(service.Annotations).To(HaveKey(forge.MetallbLoadBalancerIPsAnnotation))
-				assignedIP := service.Annotations[forge.MetallbLoadBalancerIPsAnnotation]
+				Expect(service.Annotations).To(HaveKey(forge.LoadBalancerIPsAnnotationKey))
+				assignedIP := service.Annotations[forge.LoadBalancerIPsAnnotationKey]
 				Expect(assignedIP).To(BeElementOf("172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"))
 
 				// Verify instance status was updated (if supported in this test environment)
@@ -210,7 +210,7 @@ var _ = Describe("Public Exposure Functions", func() {
 						Namespace: namespace,
 						Labels:    forge.LoadBalancerServiceLabels(),
 						Annotations: map[string]string{
-							forge.MetallbLoadBalancerIPsAnnotation: "172.18.0.240",
+							forge.LoadBalancerIPsAnnotationKey: "172.18.0.240",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -263,7 +263,7 @@ var _ = Describe("Public Exposure Functions", func() {
 						Namespace: namespace,
 						Labels:    forge.LoadBalancerServiceLabels(),
 						Annotations: map[string]string{
-							forge.MetallbLoadBalancerIPsAnnotation: "172.18.0.240",
+							forge.LoadBalancerIPsAnnotationKey: "172.18.0.240",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -409,7 +409,7 @@ var _ = Describe("Public Exposure Functions", func() {
 							Namespace: namespace,
 							Labels:    forge.LoadBalancerServiceLabels(),
 							Annotations: map[string]string{
-								forge.MetallbLoadBalancerIPsAnnotation: ip,
+								forge.LoadBalancerIPsAnnotationKey: ip,
 							},
 						},
 						Spec: v1.ServiceSpec{

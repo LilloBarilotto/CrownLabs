@@ -69,7 +69,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 	err := c.Get(ctx, types.NamespacedName{Name: existingSvc.Name, Namespace: instance.Namespace}, existingSvc)
 	if err == nil {
 		var preferredIP string
-		if ip, ok := existingSvc.Annotations[forge.MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {
+		if ip, ok := existingSvc.Annotations[forge.LoadBalancerIPsAnnotationKey]; ok && ip != "" {
 			preferredIP = ip
 		} else if len(existingSvc.Status.LoadBalancer.Ingress) > 0 {
 			preferredIP = existingSvc.Status.LoadBalancer.Ingress[0].IP
@@ -200,7 +200,7 @@ func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, e
 
 		var externalIP string
 		// Prefer the annotation as it's the desired state.
-		if ip, ok := svc.Annotations[forge.MetallbLoadBalancerIPsAnnotation]; ok && ip != "" {
+		if ip, ok := svc.Annotations[forge.LoadBalancerIPsAnnotationKey]; ok && ip != "" {
 			externalIP = ip
 		} else if len(svc.Status.LoadBalancer.Ingress) > 0 {
 			externalIP = svc.Status.LoadBalancer.Ingress[0].IP

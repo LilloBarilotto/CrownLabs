@@ -65,7 +65,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 				TargetPort: p.TargetPort.IntVal,
 			})
 		}
-		currentIP := service.Annotations[forge.MetallbLoadBalancerIPsAnnotation]
+		currentIP := service.Annotations[forge.LoadBalancerIPsAnnotationKey]
 
 		// If the current IP and ports match the desired, skip update
 		if reflect.DeepEqual(desiredPorts, currentPorts) && currentIP != "" {
