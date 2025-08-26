@@ -1,0 +1,98 @@
+// Copyright 2020-2025 Politecnico di Torino
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package forge
+
+import (
+	"fmt"
+	"strings"
+
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+
+	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
+)
+
+// Metallb annotations, values, and labels for LoadBalancer services related to public exposure.
+const (
+	AllowSharedIPValue             = "true"
+	BasePortForAutomaticAssignment = 49152
+	LabelPublicExposureValue       = "pe"
+)
+
+var (
+	AllowSharedIPAnnotationKey   = "metallb.universe.tf/shared-ip"
+	LoadBalancerIPsAnnotationKey = "metallb.universe.tf/loadBalancerIPs"
+
+	// Cilium SharedIpAnnotation | lbipam.cilium.io/sharing-key = "public-exposure"
+	// Cilium SharedIpAcrossNamespace | lbipam.cilium.io/sharing-cross-namespace = "*"
+	// Cilium LoadBalancerIPsAnnotation | lbipam.cilium.io/ips
+
+	// MetalLB SharedIpAnnotation | metallb.universe.tf/shared-ip = "public-exposure"
+	// MetalLB LoadBalancerIPsAnnotation | metallb.universe.tf/loadBalancerIPs
+)
+
+func ConfigureLoadBalancerAnnotationKeys(raw string) (string, string, error) {
+	parts := strings.SplitN(raw, ",", -1)
+	if len(parts) < 2 {
+		return "", "", fmt.Errorf("invalid annotation format")
+	}
+	sharedKey := strings.TrimSpace(parts[0])
+	ipKey := strings.TrimSpace(parts[1])
+	// Based on MetalLB, in case of multiple annotation keys, like Cilium with the SharedIpAcrossNamespace, add LoC
+
+	return sharedKey, ipKey, nil
+}
+
+// LoadBalancerServiceSpec forges the spec for a LoadBalancer service for public exposure.
+func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.PublicServicePort) v1.ServiceSpec {
+	svcPorts := make([]v1.ServicePort, len(ports))
+	for i, p := range ports {
+		svcPorts[i] = v1.ServicePort{
+			Name:       p.Name,
+			Port:       p.Port,
+			TargetPort: intstr.FromInt32(p.TargetPort),
+			Protocol:   v1.ProtocolTCP,
+		}
+	}
+	return v1.ServiceSpec{
+		Type:     v1.ServiceTypeLoadBalancer,
+		Selector: InstanceSelectorLabels(instance),
+		Ports:    svcPorts,
+	}
+}
+
+// LoadBalancerServiceAnnotations forges the annotations for a LoadBalancer service.
+func LoadBalancerServiceAnnotations(externalIP string) map[string]string {
+	annotations := map[string]string{
+		AllowSharedIPAnnotationKey:   AllowSharedIPValue,
+		LoadBalancerIPsAnnotationKey: externalIP,
+	}
+
+	return annotations
+}
+
+// LoadBalancerServiceLabels forges the labels for a LoadBalancer service.
+func LoadBalancerServiceLabels() map[string]string {
+	labels := map[string]string{
+		labelComponentKey: LabelPublicExposureValue,
+	}
+
+	return labels
+}
+
+// LoadBalancerServiceName forges the name for a LoadBalancer service based on the instance name.
+func LoadBalancerServiceName(instance *clv1alpha2.Instance) string {
+	return instance.Name + "-" + LabelPublicExposureValue
+}
