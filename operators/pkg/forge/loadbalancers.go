@@ -94,5 +94,5 @@ func LoadBalancerServiceLabels() map[string]string {
 
 // LoadBalancerServiceName forges the name for a LoadBalancer service based on the instance name.
 func LoadBalancerServiceName(instance *clv1alpha2.Instance) string {
-	return instance.Name + "-public-exposure"
+	return instance.Name + "-" + labelPublicExposureValue
 }
