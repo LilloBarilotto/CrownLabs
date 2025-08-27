@@ -24,22 +24,24 @@ import (
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 )
 
+// PublicExposureOpts contains configuration for LoadBalancer services and public exposure.
+type PublicExposureOpts struct {
+	IPPool             []string          // List of available IPs for assignment
+	CommonAnnotations  map[string]string // Common annotations to add to all LoadBalancer services
+	LoadBalancerIPsKey string            // Annotation key for specifying the IP (e.g., "metallb.universe.tf/loadBalancerIPs")
+}
+
 // Metallb annotations, values, and labels for LoadBalancer services related to public exposure.
 const (
 	AllowSharedIPValue             = "true"
 	BasePortForAutomaticAssignment = 49152
 	LabelPublicExposureValue       = "pe"
-)
 
-var (
-	AllowSharedIPAnnotationKey   = "metallb.universe.tf/shared-ip"
-	LoadBalancerIPsAnnotationKey = "metallb.universe.tf/loadBalancerIPs"
-
-	// Cilium SharedIpAnnotation | lbipam.cilium.io/sharing-key = "public-exposure"
+	// Cilium SharedIpAnnotation | lbipam.cilium.io/sharing-key = "pe"
 	// Cilium SharedIpAcrossNamespace | lbipam.cilium.io/sharing-cross-namespace = "*"
 	// Cilium LoadBalancerIPsAnnotation | lbipam.cilium.io/ips
 
-	// MetalLB SharedIpAnnotation | metallb.universe.tf/shared-ip = "public-exposure"
+	// MetalLB SharedIpAnnotation | metallb.universe.tf/shared-ip = "pe"
 	// MetalLB LoadBalancerIPsAnnotation | metallb.universe.tf/loadBalancerIPs
 )
 
@@ -73,12 +75,17 @@ func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.P
 	}
 }
 
-// LoadBalancerServiceAnnotations forges the annotations for a LoadBalancer service.
-func LoadBalancerServiceAnnotations(externalIP string) map[string]string {
-	annotations := map[string]string{
-		AllowSharedIPAnnotationKey:   AllowSharedIPValue,
-		LoadBalancerIPsAnnotationKey: externalIP,
+// LoadBalancerServiceAnnotations forges the annotations for a LoadBalancer service using the provided options.
+func LoadBalancerServiceAnnotations(externalIP string, opts *PublicExposureOpts) map[string]string {
+	annotations := make(map[string]string)
+
+	// Add common annotations first
+	for key, value := range opts.CommonAnnotations {
+		annotations[key] = value
 	}
+
+	// Add the LoadBalancer IP annotation using the configured key
+	annotations[opts.LoadBalancerIPsKey] = externalIP
 
 	return annotations
 }
@@ -95,4 +102,27 @@ func LoadBalancerServiceLabels() map[string]string {
 // LoadBalancerServiceName forges the name for a LoadBalancer service based on the instance name.
 func LoadBalancerServiceName(instance *clv1alpha2.Instance) string {
 	return instance.Name + "-" + LabelPublicExposureValue
+}
+
+// ParseAnnotations parses a string like "key1=val1,key2=val2" into a map.
+func ParseAnnotations(raw string) (map[string]string, error) {
+	annotations := make(map[string]string)
+	if raw == "" {
+		return annotations, nil
+	}
+
+	pairs := strings.Split(raw, ",")
+	for _, pair := range pairs {
+		kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(kv) != 2 {
+			return nil, fmt.Errorf("invalid annotation format: %s", pair)
+		}
+		key := strings.TrimSpace(kv[0])
+		value := strings.TrimSpace(kv[1])
+		if key == "" {
+			return nil, fmt.Errorf("empty annotation key in: %s", pair)
+		}
+		annotations[key] = value
+	}
+	return annotations, nil
 }

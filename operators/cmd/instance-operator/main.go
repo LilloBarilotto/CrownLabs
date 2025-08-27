@@ -63,8 +63,9 @@ func main() {
 	containerEnvOpts := forge.ContainerEnvOpts{}
 	svcUrls := instctrl.ServiceUrls{}
 	instSnapOpts := instancesnapshot_controller.ContainersSnapshotOpts{}
+	publicExposureOpts := forge.PublicExposureOpts{}
 	publicExposureIPPoolRaw := ""
-	publicExposureAnnotationKeysRaw := ""
+	publicExposureCommonAnnotationRaw := ""
 
 	metricsAddr := flag.String("metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	enableLeaderElection := flag.Bool("enable-leader-election", false,
@@ -99,7 +100,8 @@ func main() {
 	flag.StringVar(&instSnapOpts.ContainerKaniko, "container-kaniko-img", "gcr.io/kaniko-project/executor", "The image for the Kaniko container to be deployed")
 
 	flag.StringVar(&publicExposureIPPoolRaw, "public-exposure-ip-pool", "", "Comma-separated list of IPs, ranges or CIDRs for public exposure")
-	flag.StringVar(&publicExposureAnnotationKeysRaw, "public-exposure-annotation-keys", "", "Comma-separated list of annotation keys for public exposure")
+	flag.StringVar(&publicExposureCommonAnnotationRaw, "public-exposure-common-annotations", "", "Comma-separated list of common annotations in format key1=val1,key2=val2")
+	flag.StringVar(&publicExposureOpts.LoadBalancerIPsKey, "public-exposure-loadbalancer-ips-key", "metallb.universe.tf/loadBalancerIPs", "Annotation key for specifying LoadBalancer IPs")
 
 	restcfg.InitFlags(nil)
 	klog.InitFlags(nil)
@@ -136,24 +138,27 @@ func main() {
 	}
 	log.Info("PublicExposureIPPool", "pool", ipPool)
 
-	// Configure annotation keys for public exposure using the flag value.
-	sharedKey, ipsKey, err := forge.ConfigureLoadBalancerAnnotationKeys(publicExposureAnnotationKeysRaw)
+	// Parse common annotations
+	commonAnnotations, err := forge.ParseAnnotations(publicExposureCommonAnnotationRaw)
 	if err != nil {
-		log.Error(err, "Invalid public exposure annotation keys")
+		log.Error(err, "Invalid public exposure common annotations")
 		os.Exit(1)
 	}
-	log.Info("Configured public exposure annotation keys", "sharedIPKey", sharedKey, "lbIPsKey", ipsKey)
+	publicExposureOpts.IPPool = ipPool
+	publicExposureOpts.CommonAnnotations = commonAnnotations
+
+	log.Info("Public exposure configuration", "ipPool", publicExposureOpts.IPPool, "commonAnnotations", publicExposureOpts.CommonAnnotations, "loadBalancerIPsKey", publicExposureOpts.LoadBalancerIPsKey)
 
 	// Configure the Instance controller
 	const instanceCtrlName = "Instance"
 	if err = (&instctrl.InstanceReconciler{
-		Client:               mgr.GetClient(),
-		Scheme:               mgr.GetScheme(),
-		EventsRecorder:       mgr.GetEventRecorderFor(instanceCtrlName),
-		NamespaceWhitelist:   nsWhitelist,
-		ServiceUrls:          svcUrls,
-		ContainerEnvOpts:     containerEnvOpts,
-		PublicExposureIPPool: ipPool,
+		Client:             mgr.GetClient(),
+		Scheme:             mgr.GetScheme(),
+		EventsRecorder:     mgr.GetEventRecorderFor(instanceCtrlName),
+		NamespaceWhitelist: nsWhitelist,
+		ServiceUrls:        svcUrls,
+		ContainerEnvOpts:   containerEnvOpts,
+		PublicExposureOpts: publicExposureOpts,
 	}).SetupWithManager(mgr, *maxConcurrentReconciles); err != nil {
 		log.Error(err, "unable to create controller", "controller", instanceCtrlName)
 		os.Exit(1)

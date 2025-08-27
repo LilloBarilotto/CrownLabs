@@ -136,24 +136,37 @@ var _ = Describe("LoadBalancers forging", func() {
 	})
 
 	Describe("The forge.LoadBalancerServiceAnnotations function", func() {
-		var annotations map[string]string
+		var (
+			annotations map[string]string
+			opts        forge.PublicExposureOpts
+		)
+
+		BeforeEach(func() {
+			opts = forge.PublicExposureOpts{
+				CommonAnnotations: map[string]string{
+					"metallb.universe.tf/shared-ip":    "public-exposure",
+					"metallb.universe.tf/address-pool": "public",
+				},
+				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
+			}
+		})
 
 		JustBeforeEach(func() {
-			annotations = forge.LoadBalancerServiceAnnotations(externalIP)
+			annotations = forge.LoadBalancerServiceAnnotations(externalIP, &opts)
 		})
 
 		When("Forging the LoadBalancer service annotations", func() {
 			It("Should set the correct MetalLB address pool annotation", func() {
 				Expect(annotations).To(HaveKeyWithValue(
 					"metallb.universe.tf/address-pool",
-					"my-ip-pool",
+					"public",
 				))
 			})
 
 			It("Should set the correct MetalLB allow shared IP annotation", func() {
 				Expect(annotations).To(HaveKeyWithValue(
-					"metallb.universe.tf/allow-shared-ip",
-					"true",
+					"metallb.universe.tf/shared-ip",
+					"public-exposure",
 				))
 			})
 
@@ -173,13 +186,38 @@ var _ = Describe("LoadBalancers forging", func() {
 			const differentIP = "172.18.0.241"
 
 			JustBeforeEach(func() {
-				annotations = forge.LoadBalancerServiceAnnotations(differentIP)
+				annotations = forge.LoadBalancerServiceAnnotations(differentIP, &opts)
 			})
 
 			It("Should use the provided external IP", func() {
 				Expect(annotations).To(HaveKeyWithValue(
 					"metallb.universe.tf/loadBalancerIPs",
 					differentIP,
+				))
+			})
+		})
+
+		When("Custom annotation keys are used", func() {
+			BeforeEach(func() {
+				opts = forge.PublicExposureOpts{
+					CommonAnnotations: map[string]string{
+						"lbipam.cilium.io/sharing-key": "public-exposure",
+					},
+					LoadBalancerIPsKey: "lbipam.cilium.io/ips",
+				}
+			})
+
+			It("Should use the custom LoadBalancer IPs key", func() {
+				Expect(annotations).To(HaveKeyWithValue(
+					"lbipam.cilium.io/ips",
+					externalIP,
+				))
+			})
+
+			It("Should include common annotations", func() {
+				Expect(annotations).To(HaveKeyWithValue(
+					"lbipam.cilium.io/sharing-key",
+					"public-exposure",
 				))
 			})
 		})

@@ -65,7 +65,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 				TargetPort: p.TargetPort.IntVal,
 			})
 		}
-		currentIP := service.Annotations[forge.LoadBalancerIPsAnnotationKey]
+		currentIP := service.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]
 
 		// If the current IP and ports match the desired, skip update
 		if reflect.DeepEqual(desiredPorts, currentPorts) && currentIP != "" {
@@ -84,7 +84,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	}
 
 	// 1. Retrieve the map of used ports by other LoadBalancer services
-	usedPortsByIP, err := UpdateUsedPortsByIP(ctx, r.Client, service.Name, instance.Namespace)
+	usedPortsByIP, err := UpdateUsedPortsByIP(ctx, r.Client, service.Name, instance.Namespace, &r.PublicExposureOpts)
 	if err != nil {
 		log.Error(err, "failed to get used ports by IP")
 		return err
@@ -111,12 +111,8 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 			service.Labels = forge.LoadBalancerServiceLabels()
 		}
 
-		// Set annotations
-		if service.Annotations == nil {
-			service.Annotations = forge.LoadBalancerServiceAnnotations(targetIP)
-		} else {
-			service.Annotations[forge.LoadBalancerIPsAnnotationKey] = targetIP
-		}
+		// Set annotations using the new options
+		service.Annotations = forge.LoadBalancerServiceAnnotations(targetIP, &r.PublicExposureOpts)
 
 		// Set spec
 		service.Spec = forge.LoadBalancerServiceSpec(instance, assignedPorts)

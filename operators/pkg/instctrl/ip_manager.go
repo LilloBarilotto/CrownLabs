@@ -58,7 +58,7 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureIPPool, usedPortsByIP)
+	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureOpts.IPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
 	// Check if a service already exists for this instance and try to reuse its IP.
@@ -69,7 +69,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 	err := c.Get(ctx, types.NamespacedName{Name: existingSvc.Name, Namespace: instance.Namespace}, existingSvc)
 	if err == nil {
 		var preferredIP string
-		if ip, ok := existingSvc.Annotations[forge.LoadBalancerIPsAnnotationKey]; ok && ip != "" {
+		if ip, ok := existingSvc.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]; ok && ip != "" {
 			preferredIP = ip
 		} else if len(existingSvc.Status.LoadBalancer.Ingress) > 0 {
 			preferredIP = existingSvc.Status.LoadBalancer.Ingress[0].IP
@@ -174,7 +174,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 
 // UpdateUsedPortsByIP scans LoadBalancer services with the specific public-exposure label
 // to build a map of used ports per IP.
-func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, excludeSvcNs string) (map[string]map[int32]bool, error) {
+func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, excludeSvcNs string, opts *forge.PublicExposureOpts) (map[string]map[int32]bool, error) {
 	usedPortsByIP := make(map[string]map[int32]bool)
 	log := ctrl.LoggerFrom(ctx)
 
@@ -204,7 +204,7 @@ func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, e
 
 		var externalIP string
 		// Prefer the annotation as it's the desired state.
-		if ip, ok := svc.Annotations[forge.LoadBalancerIPsAnnotationKey]; ok && ip != "" {
+		if ip, ok := svc.Annotations[opts.LoadBalancerIPsKey]; ok && ip != "" {
 			externalIP = ip
 		} else if len(svc.Status.LoadBalancer.Ingress) > 0 {
 			externalIP = svc.Status.LoadBalancer.Ingress[0].IP

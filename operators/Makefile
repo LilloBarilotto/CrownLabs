@@ -79,7 +79,8 @@ run-instance: generate
 				--instances-auth-url=crownlabs.polito.it/app/instances/auth\
 				--container-env-sidecars-tag=v0.14.5\
 				--public-exposure-ip-pool="172.18.0.240-172.18.0.248,172.18.0.249,172.18.0.250/30"\
-				--public-exposure-annotation-keys="metallb.universe.tf/shared-ip,metallb.universe.tf/loadBalancerIPs"
+				--public-exposure-common-annotations="metallb.universe.tf/shared-ip=public-exposure,metallb.universe.tf/address-pool=public"\
+				--public-exposure-loadbalancer-ips-key="metallb.universe.tf/loadBalancerIPs"
 
 #the double target below is used to set DOMAIN for local targets
 #reference: https://www.gnu.org/software/make/manual/html_node/Target_002dspecific.html

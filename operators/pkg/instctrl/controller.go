@@ -47,13 +47,12 @@ import (
 // InstanceReconciler reconciles an Instance object.
 type InstanceReconciler struct {
 	client.Client
-	Scheme               *runtime.Scheme
-	EventsRecorder       record.EventRecorder
-	NamespaceWhitelist   metav1.LabelSelector
-	ServiceUrls          ServiceUrls
-	ContainerEnvOpts     forge.ContainerEnvOpts
-	PublicExposureIPPool []string
-
+	Scheme             *runtime.Scheme
+	EventsRecorder     record.EventRecorder
+	NamespaceWhitelist metav1.LabelSelector
+	ServiceUrls        ServiceUrls
+	ContainerEnvOpts   forge.ContainerEnvOpts
+	PublicExposureOpts forge.PublicExposureOpts
 	// This function, if configured, is deferred at the beginning of the Reconcile.
 	// Specifically, it is meant to be set to GinkgoRecover during the tests,
 	// in order to lead to a controlled failure in case the Reconcile panics.
@@ -180,7 +179,7 @@ func (r *InstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}
 
 	if err = r.podScheduleStatusIntoInstance(ctx, &instance); err != nil {
-		log.Error(err, "unable to retrieve pod schedule status")
+		log.Error(err, "unable to retrieve pod schedule sReconcileDeferHooktatus")
 	}
 
 	tracer.Step("instance environments enforced")
