@@ -101,7 +101,6 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 			autoPorts = append(autoPorts, svcPort)
 		}
 	}
-	log.Info("Port classification", "specifiedPorts", len(specifiedPorts), "autoPorts", len(autoPorts))
 
 	// Iterate over each available IP in the prioritized pool.
 	for _, ip := range prioritizedIPPool {
@@ -162,13 +161,11 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 
 		// 3. If all ports are assignable, this is the best IP.
 		if allAutoPortsAssignable {
-			log.Info("SUCCESS: Found compatible IP", "ip", ip, "assignedPorts", tempAssignedPorts)
+			log.Info("Found compatible IP and assigned all ports", "ip", ip, "ports", tempAssignedPorts)
 			return ip, tempAssignedPorts, nil
 		}
-		log.Info("IP rejected due to auto port failure", "ip", ip)
 	}
 
-	log.Info("FAILURE: No compatible IP found", "totalIPs", len(prioritizedIPPool))
 	return "", nil, fmt.Errorf("no available IP can support all requested ports")
 }
 

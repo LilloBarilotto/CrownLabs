@@ -90,12 +90,17 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		return err
 	}
 
+	// Initialize PublicExposure status if nil
+	if instance.Status.PublicExposure == nil {
+		instance.Status.PublicExposure = &clv1alpha2.InstancePublicExposureStatus{}
+	}
 	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseProvisioning
 
 	// 2. Find the best IP and ports to assign using the logic from ip_manager.go
 	targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
 	if err != nil {
 		log.Error(err, "failed to assign IP and ports for public exposure")
+		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
 		return err
 	}
 
@@ -128,14 +133,9 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	log.V(utils.FromResult(op)).Info("LoadBalancer service enforced", "service", service.GetName(), "result", op)
 
 	// 4. Update the instance status
-	newStatus := &clv1alpha2.InstancePublicExposureStatus{
-		ExternalIP: targetIP,
-		Ports:      assignedPorts,
-		Phase:      clv1alpha2.PublicExposurePhaseReady,
-	}
-	if !reflect.DeepEqual(instance.Status.PublicExposure, newStatus) {
-		instance.Status.PublicExposure = newStatus
-	}
+	instance.Status.PublicExposure.ExternalIP = targetIP
+	instance.Status.PublicExposure.Ports = assignedPorts
+	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseReady
 
 	return nil
 }
