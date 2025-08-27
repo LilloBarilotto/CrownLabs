@@ -16,9 +16,11 @@ package instctrl_test
 
 import (
 	"context"
-	"crypto/rand"
+	crand "crypto/rand"
 	"fmt"
 	"math/big"
+	mrand "math/rand"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -44,6 +46,12 @@ var _ = Describe("Public Exposure Functions", func() {
 		namespace  string
 	)
 
+	// Helper to pick a random IP from the available pool
+	getRandomIP := func() string {
+		pool := []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"}
+		mrand.Seed(time.Now().UnixNano())
+		return pool[mrand.Intn(len(pool))]
+	}
 	// Helper function to create a test LoadBalancer service
 	createTestLoadBalancerService := func() {
 		svcName := forge.LoadBalancerServiceName(instance)
@@ -77,12 +85,19 @@ var _ = Describe("Public Exposure Functions", func() {
 
 	BeforeEach(func() {
 		// Generate unique namespace name to avoid conflicts
-		randomNum, _ := rand.Int(rand.Reader, big.NewInt(100000))
+		randomNum, _ := crand.Int(crand.Reader, big.NewInt(100000))
 		namespace = fmt.Sprintf("test-namespace-%d", randomNum.Int64())
 		reconciler = &instctrl.InstanceReconciler{
-			Client:               k8sClient,
-			Scheme:               k8sClient.Scheme(),
-			PublicExposureIPPool: []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"},
+			Client: k8sClient,
+			Scheme: k8sClient.Scheme(),
+			PublicExposureOpts: forge.PublicExposureOpts{
+				IPPool: []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"},
+				CommonAnnotations: map[string]string{
+					"metallb.universe.tf/allow-shared-ip": "public-exposure",
+					"metallb.universe.tf/address-pool":    "public",
+				},
+				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
+			},
 		}
 
 		template = &clv1alpha2.Template{
@@ -130,6 +145,9 @@ var _ = Describe("Public Exposure Functions", func() {
 			},
 		}
 
+		// Assign a random IP annotation to avoid pool saturation in tests
+		instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
+
 		// Create namespace
 		ns := &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -153,6 +171,8 @@ var _ = Describe("Public Exposure Functions", func() {
 			},
 		}
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+		// Wait for resources to be cleaned up before next test
+		time.Sleep(200 * time.Millisecond)
 	})
 
 	Describe("EnforcePublicExposure", func() {
@@ -164,6 +184,8 @@ var _ = Describe("Public Exposure Functions", func() {
 			})
 
 			It("Should create LoadBalancer service when conditions are met", func() {
+				// Ensure annotation is set before enforcing public exposure
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 				err := reconciler.EnforcePublicExposure(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -180,8 +202,8 @@ var _ = Describe("Public Exposure Functions", func() {
 				Expect(service.Spec.Ports[0].TargetPort).To(Equal(intstr.FromInt32(80)))
 
 				// Verify annotations
-				Expect(service.Annotations).To(HaveKey(forge.LoadBalancerIPsAnnotationKey))
-				assignedIP := service.Annotations[forge.LoadBalancerIPsAnnotationKey]
+				Expect(service.Annotations).To(HaveKey("metallb.universe.tf/loadBalancerIPs"))
+				assignedIP := service.Annotations["metallb.universe.tf/loadBalancerIPs"]
 				Expect(assignedIP).To(BeElementOf("172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"))
 
 				// Verify instance status was updated (if supported in this test environment)
@@ -202,15 +224,17 @@ var _ = Describe("Public Exposure Functions", func() {
 			})
 
 			It("Should update existing service when ports change", func() {
-				// First create a service with different ports
 				svcName := forge.LoadBalancerServiceName(instance)
+				// Ensure annotation is set before service creation
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
+				// First create a service with different ports
 				existingService := &v1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      svcName,
 						Namespace: namespace,
 						Labels:    forge.LoadBalancerServiceLabels(),
 						Annotations: map[string]string{
-							forge.LoadBalancerIPsAnnotationKey: "172.18.0.240",
+							"metallb.universe.tf/loadBalancerIPs": "172.18.0.240",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -239,6 +263,8 @@ var _ = Describe("Public Exposure Functions", func() {
 						TargetPort: 443,
 					},
 				}
+				// Ensure annotation is set after changing ports
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
 				ctx, _ = clctx.InstanceInto(ctx, instance)
 
@@ -255,6 +281,8 @@ var _ = Describe("Public Exposure Functions", func() {
 			})
 
 			It("Should skip update when service matches desired state", func() {
+				// Ensure annotation is set before service creation
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 				// Create service with matching state
 				svcName := forge.LoadBalancerServiceName(instance)
 				matchingService := &v1.Service{
@@ -263,7 +291,7 @@ var _ = Describe("Public Exposure Functions", func() {
 						Namespace: namespace,
 						Labels:    forge.LoadBalancerServiceLabels(),
 						Annotations: map[string]string{
-							forge.LoadBalancerIPsAnnotationKey: "172.18.0.240",
+							"metallb.universe.tf/loadBalancerIPs": "172.18.0.240",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -306,6 +334,7 @@ var _ = Describe("Public Exposure Functions", func() {
 			It("Should remove service when template doesn't allow public exposure", func() {
 				// Create existing service
 				svcName := forge.LoadBalancerServiceName(instance)
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 				existingService := &v1.Service{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      svcName,
@@ -365,11 +394,12 @@ var _ = Describe("Public Exposure Functions", func() {
 				// Create existing service
 				createTestLoadBalancerService()
 
-				// Update instance to remove public exposure
+				// Remove public exposure
 				instance.Spec.PublicExposure = nil
 				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
 				ctx, _ = clctx.InstanceInto(ctx, instance)
 
+				// Enforce public exposure removal (should delete service, not update with empty annotation)
 				err := reconciler.EnforcePublicExposure(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -405,11 +435,11 @@ var _ = Describe("Public Exposure Functions", func() {
 				for i, ip := range []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"} {
 					service := &v1.Service{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "blocking-service-" + string(rune(i+'1')),
+							Name:      fmt.Sprintf("blocking-service-%d", i+1),
 							Namespace: namespace,
 							Labels:    forge.LoadBalancerServiceLabels(),
 							Annotations: map[string]string{
-								forge.LoadBalancerIPsAnnotationKey: ip,
+								"metallb.universe.tf/loadBalancerIPs": ip,
 							},
 						},
 						Spec: v1.ServiceSpec{
@@ -447,6 +477,9 @@ var _ = Describe("Public Exposure Functions", func() {
 			})
 
 			It("Should assign automatic port when requested", func() {
+				// Ensure annotation is set before enforcing public exposure
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 				err := reconciler.EnforcePublicExposure(ctx)
 				Expect(err).ToNot(HaveOccurred())
 

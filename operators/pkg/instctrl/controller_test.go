@@ -471,9 +471,6 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 				testName = "test-public-exposure-enabled"
 				runInstance = true
 				environment.EnvironmentType = clv1alpha2.ClassContainer
-
-				// Initialize PublicExposureIPPool in the reconciler
-				instanceReconciler.PublicExposureIPPool = []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243", "172.18.0.244", "172.18.0.245"}
 			})
 
 			JustBeforeEach(func() {
@@ -500,7 +497,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 				Expect(RunReconciler()).To(Succeed())
 
 				By("Asserting the LoadBalancer service has been created", func() {
-					serviceName := testName + "-public-exposure"
+					serviceName := testName + "-pe"
 					var lbService corev1.Service
 					Expect(k8sClient.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: testName}, &lbService)).To(Succeed())
 
@@ -611,8 +608,6 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 				testName = "test-public-exposure-removal"
 				runInstance = true
 				environment.EnvironmentType = clv1alpha2.ClassContainer
-
-				instanceReconciler.PublicExposureIPPool = []string{"172.18.0.246", "172.18.0.247", "172.18.0.248", "172.18.0.249"}
 			})
 
 			It("Should remove LoadBalancer service when public exposure is disabled", func() {
@@ -635,7 +630,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 				Expect(RunReconciler()).To(Succeed())
 
 				// Verify service was created
-				serviceName := testName + "-public-exposure"
+				serviceName := testName + "-pe"
 				var lbService corev1.Service
 				Expect(k8sClient.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: testName}, &lbService)).To(Succeed())
 

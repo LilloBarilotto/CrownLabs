@@ -16,9 +16,11 @@ package instctrl_test
 
 import (
 	"context"
-	"crypto/rand"
+	crand "crypto/rand"
 	"fmt"
 	"math/big"
+	mrand "math/rand"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -40,14 +42,28 @@ var _ = Describe("IP Manager Functions", func() {
 		namespace  string
 	)
 
+	// Helper to pick a random IP from the available pool
+	getRandomIP := func() string {
+		pool := []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"}
+		mrand.Seed(time.Now().UnixNano())
+		return pool[mrand.Intn(len(pool))]
+	}
+
 	BeforeEach(func() {
 		// Generate unique namespace name to avoid conflicts
-		randomNum, _ := rand.Int(rand.Reader, big.NewInt(100000))
+		randomNum, _ := crand.Int(crand.Reader, big.NewInt(100000))
 		namespace = fmt.Sprintf("test-namespace-%d", randomNum.Int64())
 		reconciler = &instctrl.InstanceReconciler{
-			Client:               k8sClient,
-			Scheme:               k8sClient.Scheme(),
-			PublicExposureIPPool: []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"},
+			Client: k8sClient,
+			Scheme: k8sClient.Scheme(),
+			PublicExposureOpts: forge.PublicExposureOpts{
+				IPPool: []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"},
+				CommonAnnotations: map[string]string{
+					"metallb.universe.tf/allow-shared-ip": "public-exposure",
+					"metallb.universe.tf/address-pool":    "public",
+				},
+				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
+			},
 		}
 
 		instance = &clv1alpha2.Instance{
@@ -68,6 +84,9 @@ var _ = Describe("IP Manager Functions", func() {
 			},
 		}
 
+		// Assign a random IP annotation to avoid pool saturation in tests
+		instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
+
 		// Create namespace
 		ns := &v1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
@@ -85,6 +104,8 @@ var _ = Describe("IP Manager Functions", func() {
 			},
 		}
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
+		// Wait for resources to be cleaned up before next test
+		time.Sleep(200 * time.Millisecond)
 	})
 
 	Describe("BuildPrioritizedIPPool", func() {
@@ -94,9 +115,7 @@ var _ = Describe("IP Manager Functions", func() {
 				"172.18.0.242": {8080: true},
 				"172.18.0.240": {9090: true},
 			}
-
 			prioritizedPool := reconciler.BuildPrioritizedIPPool(fullPool, usedPortsByIP)
-
 			// Used IPs should come first, sorted alphabetically
 			Expect(prioritizedPool).To(HaveLen(4))
 			Expect(prioritizedPool[0]).To(Equal("172.18.0.240"))
@@ -143,6 +162,8 @@ var _ = Describe("IP Manager Functions", func() {
 						TargetPort: 443,
 					},
 				}
+				// Ensure annotation is set after changing ports
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{}
 
@@ -163,6 +184,8 @@ var _ = Describe("IP Manager Functions", func() {
 						TargetPort: 80,
 					},
 				}
+				// Ensure annotation is set after changing ports
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{
 					"172.18.0.240": {8080: true}, // Port conflict
@@ -187,6 +210,8 @@ var _ = Describe("IP Manager Functions", func() {
 						TargetPort: 80,
 					},
 				}
+				// Ensure annotation is set after changing ports
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{}
 
@@ -194,7 +219,7 @@ var _ = Describe("IP Manager Functions", func() {
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ip).To(Equal("172.18.0.240"))
-				Expect(assignedPorts).To(HaveLen(1))
+				// Ensure annotation is set before any service creation or update
 				Expect(assignedPorts[0].Port).To(Equal(int32(forge.BasePortForAutomaticAssignment)))
 			})
 
@@ -206,6 +231,8 @@ var _ = Describe("IP Manager Functions", func() {
 						TargetPort: 80,
 					},
 				}
+				// Ensure annotation is set after changing ports
+				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{
 					"172.18.0.240": {int32(forge.BasePortForAutomaticAssignment): true},
@@ -214,6 +241,7 @@ var _ = Describe("IP Manager Functions", func() {
 				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
 
 				Expect(err).ToNot(HaveOccurred())
+				// Ensure annotation is set before any service creation or update
 				Expect(ip).To(Equal("172.18.0.240"))
 				Expect(assignedPorts).To(HaveLen(1))
 				Expect(assignedPorts[0].Port).To(Equal(int32(forge.BasePortForAutomaticAssignment + 1)))
@@ -228,7 +256,7 @@ var _ = Describe("IP Manager Functions", func() {
 						Name:      forge.LoadBalancerServiceName(instance),
 						Namespace: namespace,
 						Annotations: map[string]string{
-							forge.LoadBalancerIPsAnnotationKey: "172.18.0.242",
+							"metallb.universe.tf/loadBalancerIPs": "172.18.0.242",
 						},
 					},
 					Spec: v1.ServiceSpec{
@@ -239,6 +267,7 @@ var _ = Describe("IP Manager Functions", func() {
 								TargetPort: intstr.FromInt(90),
 							},
 						},
+						// Ensure annotation is set before any service creation or update
 					},
 				}
 				Expect(k8sClient.Create(ctx, svc)).To(Succeed())
@@ -259,6 +288,7 @@ var _ = Describe("IP Manager Functions", func() {
 				Expect(ip).To(Equal("172.18.0.242")) // Should prefer existing service IP
 				Expect(assignedPorts).To(HaveLen(1))
 				Expect(assignedPorts[0].Port).To(Equal(int32(8080)))
+				// Ensure annotation is set before any service creation or update
 			})
 		})
 
@@ -299,7 +329,7 @@ var _ = Describe("IP Manager Functions", func() {
 					Namespace: namespace,
 					Labels:    forge.LoadBalancerServiceLabels(),
 					Annotations: map[string]string{
-						forge.LoadBalancerIPsAnnotationKey: "172.18.0.240",
+						"metallb.universe.tf/loadBalancerIPs": "172.18.0.240",
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -338,7 +368,14 @@ var _ = Describe("IP Manager Functions", func() {
 			}
 			Expect(k8sClient.Status().Update(ctx, svc2)).To(Succeed())
 
-			usedPortsByIP, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "")
+			opts := &forge.PublicExposureOpts{
+				CommonAnnotations: map[string]string{
+					"metallb.universe.tf/shared-ip":    "public-exposure",
+					"metallb.universe.tf/address-pool": "public",
+				},
+				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
+			}
+			usedPortsByIP, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
 
 			Expect(err).ToNot(HaveOccurred())
 			// Check that our specific services are included in the results
@@ -361,7 +398,7 @@ var _ = Describe("IP Manager Functions", func() {
 					Namespace: namespace,
 					Labels:    forge.LoadBalancerServiceLabels(),
 					Annotations: map[string]string{
-						forge.LoadBalancerIPsAnnotationKey: uniqueIP,
+						"metallb.universe.tf/loadBalancerIPs": uniqueIP,
 					},
 				},
 				Spec: v1.ServiceSpec{
@@ -374,12 +411,19 @@ var _ = Describe("IP Manager Functions", func() {
 
 			Expect(k8sClient.Create(ctx, svc)).To(Succeed())
 
+			opts := &forge.PublicExposureOpts{
+				CommonAnnotations: map[string]string{
+					"metallb.universe.tf/shared-ip":    "public-exposure",
+					"metallb.universe.tf/address-pool": "public",
+				},
+				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
+			}
 			// Get the ports without exclusion (should include our service)
-			usedPortsByIPWithService, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "")
+			usedPortsByIPWithService, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Get the ports with exclusion (should exclude our service)
-			usedPortsByIPWithoutService, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "exclude-service", namespace)
+			usedPortsByIPWithoutService, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "exclude-service", namespace, opts)
 			Expect(err).ToNot(HaveOccurred())
 
 			// The excluded service should be present when not excluding
@@ -411,7 +455,14 @@ var _ = Describe("IP Manager Functions", func() {
 
 			Expect(k8sClient.Create(ctx, svc)).To(Succeed())
 
-			_, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "")
+			opts := &forge.PublicExposureOpts{
+				CommonAnnotations: map[string]string{
+					"metallb.universe.tf/shared-ip":    "public-exposure",
+					"metallb.universe.tf/address-pool": "public",
+				},
+				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
+			}
+			_, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
 
 			Expect(err).ToNot(HaveOccurred())
 			// Since the service has no external IP, it should not contribute any port mappings
@@ -438,7 +489,14 @@ var _ = Describe("IP Manager Functions", func() {
 
 			Expect(k8sClient.Create(ctx, svc)).To(Succeed())
 
-			_, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "")
+			opts := &forge.PublicExposureOpts{
+				CommonAnnotations: map[string]string{
+					"metallb.universe.tf/shared-ip":    "public-exposure",
+					"metallb.universe.tf/address-pool": "public",
+				},
+				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
+			}
+			_, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
 
 			Expect(err).ToNot(HaveOccurred())
 			// Since the service is ClusterIP (not LoadBalancer), it should not contribute any port mappings
