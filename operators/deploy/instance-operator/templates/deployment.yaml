@@ -54,7 +54,8 @@ spec:
             - "--instance-termination-status-check-interval={{ .Values.configurations.automation.terminationStatusCheckInterval }}"
             - "--shared-volume-storage-class={{ .Values.configurations.sharedVolumeOptions.storageClass }}"
             - '--public-exposure-ip-pool={{ .Values.configurations.publicExposure.ipPool | join "," }}'
-            - '--public-exposure-annotation-keys={{ .Values.configurations.publicExposure.annotationKeys | join "," }}'
+            - '--public-exposure-common-annotations={{ .Values.configurations.publicExposure.commonAnnotations | join "," }}'
+            - '--public-exposure-loadbalancer-ips-key={{ .Values.configurations.publicExposure.loadBalancerIPsKey }}'
           ports:
             - name: metrics
               containerPort: 8080

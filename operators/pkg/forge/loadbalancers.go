@@ -41,7 +41,7 @@ const (
 	// Cilium SharedIpAcrossNamespace | lbipam.cilium.io/sharing-cross-namespace = "*"
 	// Cilium LoadBalancerIPsAnnotation | lbipam.cilium.io/ips
 
-	// MetalLB SharedIpAnnotation | metallb.universe.tf/shared-ip = "pe"
+	// MetalLB SharedIpAnnotation | metallb.universe.tf/allow-shared-ip = "pe"
 	// MetalLB LoadBalancerIPsAnnotation | metallb.universe.tf/loadBalancerIPs
 )
 
