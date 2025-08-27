@@ -51,7 +51,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	}
 
 	// Try to get the existing service
-	err := r.Client.Get(ctx, client.ObjectKey{Name: service.Name, Namespace: instance.Namespace}, service)
+	err := r.Get(ctx, client.ObjectKey{Name: service.Name, Namespace: instance.Namespace}, service)
 	serviceExists := err == nil
 
 	// If the service exists, check if its current spec matches the desired spec

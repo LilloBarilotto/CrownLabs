@@ -179,7 +179,7 @@ func (r *InstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	}
 
 	if err = r.podScheduleStatusIntoInstance(ctx, &instance); err != nil {
-		log.Error(err, "unable to retrieve pod schedule sReconcileDeferHooktatus")
+		log.Error(err, "unable to retrieve pod schedule status")
 	}
 
 	tracer.Step("instance environments enforced")

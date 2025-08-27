@@ -37,16 +37,17 @@ const (
 	BasePortForAutomaticAssignment = 49152
 	LabelPublicExposureValue       = "pe"
 
-	// Cilium SharedIpAnnotation | lbipam.cilium.io/sharing-key = "pe"
-	// Cilium SharedIpAcrossNamespace | lbipam.cilium.io/sharing-cross-namespace = "*"
+	// Cilium SharedIpAnnotation | lbipam.cilium.io/sharing-key = "pe".
+	// Cilium SharedIpAcrossNamespace | lbipam.cilium.io/sharing-cross-namespace = "*".
 	// Cilium LoadBalancerIPsAnnotation | lbipam.cilium.io/ips
 
-	// MetalLB SharedIpAnnotation | metallb.universe.tf/allow-shared-ip = "pe"
+	// MetalLB SharedIpAnnotation | metallb.universe.tf/allow-shared-ip = "pe".
 	// MetalLB LoadBalancerIPsAnnotation | metallb.universe.tf/loadBalancerIPs
 )
 
+// ConfigureLoadBalancerAnnotationKeys parses a raw string containing two comma-separated annotation keys
 func ConfigureLoadBalancerAnnotationKeys(raw string) (string, string, error) {
-	parts := strings.SplitN(raw, ",", -1)
+	parts := strings.Split(raw, ",")
 	if len(parts) < 2 {
 		return "", "", fmt.Errorf("invalid annotation format")
 	}
