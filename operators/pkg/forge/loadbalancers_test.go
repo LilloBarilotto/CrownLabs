@@ -215,7 +215,7 @@ var _ = Describe("LoadBalancers forging", func() {
 
 		When("Forging the LoadBalancer service name", func() {
 			It("Should generate the correct service name", func() {
-				expectedName := instanceName + "-public-exposure"
+				expectedName := instanceName + "-pe"
 				Expect(serviceName).To(Equal(expectedName))
 			})
 		})
@@ -228,7 +228,7 @@ var _ = Describe("LoadBalancers forging", func() {
 			})
 
 			It("Should use the instance name in the service name", func() {
-				expectedName := differentInstanceName + "-public-exposure"
+				expectedName := differentInstanceName + "-pe"
 				Expect(serviceName).To(Equal(expectedName))
 			})
 		})
