@@ -485,7 +485,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 					Ports: []clv1alpha2.PublicServicePort{
 						{
 							Name:       "http",
-							Port:       8080,
+							Port:       8081,
 							TargetPort: 80,
 						},
 					},
@@ -507,7 +507,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 					// Check ports
 					Expect(lbService.Spec.Ports).To(HaveLen(1))
 					Expect(lbService.Spec.Ports[0].Name).To(Equal("http"))
-					Expect(lbService.Spec.Ports[0].Port).To(Equal(int32(8080)))
+					Expect(lbService.Spec.Ports[0].Port).To(Equal(int32(8081)))
 					Expect(lbService.Spec.Ports[0].TargetPort.IntVal).To(Equal(int32(80)))
 
 					// Check annotations for MetalLB
@@ -538,7 +538,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 					Ports: []clv1alpha2.PublicServicePort{
 						{
 							Name:       "http",
-							Port:       8080,
+							Port:       8082,
 							TargetPort: 80,
 						},
 					},
@@ -580,7 +580,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 					Ports: []clv1alpha2.PublicServicePort{
 						{
 							Name:       "http",
-							Port:       8080,
+							Port:       8083,
 							TargetPort: 80,
 						},
 					},
@@ -621,7 +621,7 @@ var _ = Describe("The instance-controller Reconcile method", func() {
 					Ports: []clv1alpha2.PublicServicePort{
 						{
 							Name:       "http",
-							Port:       8080,
+							Port:       8084,
 							TargetPort: 80,
 						},
 					},
