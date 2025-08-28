@@ -45,8 +45,8 @@ var _ = Describe("IP Manager Functions", func() {
 	// Helper to pick a random IP from the available pool
 	getRandomIP := func() string {
 		pool := []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"}
-		mrand.Seed(time.Now().UnixNano())
-		return pool[mrand.Intn(len(pool))]
+		r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+		return pool[r.Intn(len(pool))]
 	}
 
 	BeforeEach(func() {
