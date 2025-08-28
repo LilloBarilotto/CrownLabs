@@ -16,9 +16,9 @@ package tenant
 
 import (
 	"context"
+	"maps"
 
 	"github.com/go-logr/logr"
-	"maps"
 
 	"github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"

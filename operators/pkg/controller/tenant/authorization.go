@@ -17,11 +17,11 @@ package tenant
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/Nerzal/gocloak/v13"
 	"github.com/go-logr/logr"
-	"slices"
 
 	"github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"

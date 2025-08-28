@@ -16,9 +16,9 @@ package forge
 
 import (
 	"fmt"
+	"maps"
 
 	rbacv1 "k8s.io/api/rbac/v1"
-	"maps"
 
 	"github.com/netgroup-polito/CrownLabs/operators/api/v1alpha1"
 	"github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"

@@ -160,7 +160,7 @@ type PublicServicePort struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=65535
 	// +kubebuilder:default=0
-	Port int32 `json:"port"`
+	Port int32 `json:"port,omitempty"`
 	// The port on the container to target.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
