@@ -175,7 +175,6 @@ func (r *InstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (r
 	// Check the public exposure configuration.
 	if err := r.EnforcePublicExposure(ctx); err != nil {
 		log.Error(err, "failed to enforce public exposure")
-		return ctrl.Result{}, err
 	}
 
 	if err = r.podScheduleStatusIntoInstance(ctx, &instance); err != nil {

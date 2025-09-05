@@ -16,6 +16,7 @@ package instctrl
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 
 	v1 "k8s.io/api/core/v1"
@@ -45,6 +46,19 @@ func (r *InstanceReconciler) EnforcePublicExposure(ctx context.Context) error {
 func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) error {
 	log := ctrl.LoggerFrom(ctx)
 	instance := clctx.InstanceFrom(ctx)
+
+	// Initialize PublicExposure status if nil
+	if instance.Status.PublicExposure == nil {
+		instance.Status.PublicExposure = &clv1alpha2.InstancePublicExposureStatus{}
+	}
+
+	// Validate the public exposure request first.
+	if err := validatePublicExposureRequest(instance.Spec.PublicExposure.Ports); err != nil {
+		log.Error(err, "invalid public exposure request")
+		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
+		instance.Status.PublicExposure.Message = err.Error()
+		return err
+	}
 
 	service := &v1.Service{
 		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
@@ -78,6 +92,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 			}
 			if !reflect.DeepEqual(instance.Status.PublicExposure, newStatus) {
 				instance.Status.PublicExposure = newStatus
+				instance.Status.PublicExposure.Message = "" // Clear any previous error message
 			}
 			return nil
 		}
@@ -87,20 +102,20 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	usedPortsByIP, err := UpdateUsedPortsByIP(ctx, r.Client, service.Name, instance.Namespace, &r.PublicExposureOpts)
 	if err != nil {
 		log.Error(err, "failed to get used ports by IP")
+		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
+		instance.Status.PublicExposure.Message = "Failed to check free ports, contact the administrator."
 		return err
 	}
 
-	// Initialize PublicExposure status if nil
-	if instance.Status.PublicExposure == nil {
-		instance.Status.PublicExposure = &clv1alpha2.InstancePublicExposureStatus{}
-	}
 	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseProvisioning
+	instance.Status.PublicExposure.Message = "Provisioning in progress."
 
 	// 2. Find the best IP and ports to assign using the logic from ip_manager.go
 	targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
 	if err != nil {
 		log.Error(err, "failed to assign IP and ports for public exposure")
 		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
+		instance.Status.PublicExposure.Message = err.Error()
 		return err
 	}
 
@@ -128,6 +143,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	if err != nil {
 		log.Error(err, "failed to create or update LoadBalancer service", "service", service.GetName())
 		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
+		instance.Status.PublicExposure.Message = "Failed to create or update the LoadBalancer service, contact the administrator."
 		return err
 	}
 	log.V(utils.FromResult(op)).Info("LoadBalancer service enforced", "service", service.GetName(), "result", op)
@@ -136,10 +152,13 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	instance.Status.PublicExposure.ExternalIP = targetIP
 	instance.Status.PublicExposure.Ports = assignedPorts
 	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseReady
+	instance.Status.PublicExposure.Message = "Public exposure completed successfully."
 
 	// Enforce the network policy only after the service is ready.
 	if err = r.enforcePublicExposureNetworkPolicyPresence(ctx); err != nil {
 		log.Error(err, "failed to enforce public exposure network policy")
+		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
+		instance.Status.PublicExposure.Message = "Failed to enforce the network policy, contact the administrator."
 		return err
 	}
 
@@ -165,5 +184,29 @@ func (r *InstanceReconciler) enforcePublicExposureAbsence(ctx context.Context) e
 
 	// Clean up the status
 	instance.Status.PublicExposure = nil
+	return nil
+}
+
+// validatePublicExposureRequest checks for duplicates in ports and targetPorts.
+func validatePublicExposureRequest(ports []clv1alpha2.PublicServicePort) error {
+	seenPorts := make(map[int32]bool)
+	seenTargetPorts := make(map[int32]bool)
+
+	for _, p := range ports {
+		// Check for duplicate TargetPorts
+		if seenTargetPorts[p.TargetPort] {
+			return fmt.Errorf("duplicate desired targetPort %d found in public exposure request", p.TargetPort)
+		}
+		seenTargetPorts[p.TargetPort] = true
+
+		// Check for duplicate specified Ports (ignore 0, which is for auto-assignment)
+		if p.Port != 0 {
+			if seenPorts[p.Port] {
+				return fmt.Errorf("duplicate requested port %d found in public exposure request", p.Port)
+			}
+			seenPorts[p.Port] = true
+		}
+	}
+
 	return nil
 }

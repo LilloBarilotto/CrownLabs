@@ -124,6 +124,13 @@ spec:
                           maximum: 65535
                           minimum: 0
                           type: integer
+                        protocol:
+                          default: TCP
+                          description: The port protocol.
+                          enum:
+                          - TCP
+                          - UDP
+                          type: string
                         targetPort:
                           description: The port on the container to target.
                           format: int32
@@ -250,6 +257,10 @@ spec:
                     description: The external IP address assigned to the LoadBalancer
                       service.
                     type: string
+                  message:
+                    description: Message provides more details about the status, especially
+                      in case of an error.
+                    type: string
                   phase:
                     description: The current phase of the public exposure.
                     enum:
@@ -276,6 +287,13 @@ spec:
                           maximum: 65535
                           minimum: 0
                           type: integer
+                        protocol:
+                          default: TCP
+                          description: The port protocol.
+                          enum:
+                          - TCP
+                          - UDP
+                          type: string
                         targetPort:
                           description: The port on the container to target.
                           format: int32

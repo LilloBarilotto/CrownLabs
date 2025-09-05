@@ -165,6 +165,10 @@ type PublicServicePort struct {
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	TargetPort int32 `json:"targetPort"`
+	// The port protocol.
+	// +kubebuilder:validation:Enum="TCP";"UDP";
+	// +kubebuilder:default="TCP"
+	Protocol string `json:"protocol,omitempty"`
 }
 
 // PublicExposurePhase is an enumeration of the different phases associated with the public exposure of an instance.
@@ -190,6 +194,8 @@ type InstancePublicExposureStatus struct {
 	Ports []PublicServicePort `json:"ports,omitempty"`
 	// The current phase of the public exposure.
 	Phase PublicExposurePhase `json:"phase,omitempty"`
+	// Message provides more details about the status, especially in case of an error.
+	Message string `json:"message,omitempty"`
 }
 
 // +kubebuilder:object:root=true

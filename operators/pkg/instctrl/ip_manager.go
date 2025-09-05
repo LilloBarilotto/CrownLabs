@@ -128,6 +128,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 				Name:       port.Name,
 				Port:       port.Port,
 				TargetPort: port.TargetPort,
+				Protocol:   port.Protocol,
 			})
 		}
 
@@ -156,6 +157,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 				Name:       port.Name,
 				Port:       assignedPort,
 				TargetPort: port.TargetPort,
+				Protocol:   port.Protocol,
 			})
 		}
 
