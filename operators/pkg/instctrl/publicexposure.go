@@ -77,6 +77,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 				Name:       p.Name,
 				Port:       p.Port,
 				TargetPort: p.TargetPort.IntVal,
+				Protocol:   p.Protocol,
 			})
 		}
 		currentIP := service.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]
