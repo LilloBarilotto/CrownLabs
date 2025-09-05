@@ -137,6 +137,12 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	instance.Status.PublicExposure.Ports = assignedPorts
 	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseReady
 
+	// Enforce the network policy only after the service is ready.
+	if err = r.enforcePublicExposureNetworkPolicyPresence(ctx); err != nil {
+		log.Error(err, "failed to enforce public exposure network policy")
+		return err
+	}
+
 	return nil
 }
 
@@ -149,6 +155,11 @@ func (r *InstanceReconciler) enforcePublicExposureAbsence(ctx context.Context) e
 
 	// Remove the service if it exists
 	if err := utils.EnforceObjectAbsence(ctx, r.Client, service, "service"); err != nil {
+		return err
+	}
+
+	// Also remove the associated network policy.
+	if err := r.enforcePublicExposureNetworkPolicyAbsence(ctx); err != nil {
 		return err
 	}
 

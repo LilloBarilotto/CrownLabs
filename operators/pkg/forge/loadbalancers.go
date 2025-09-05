@@ -19,6 +19,8 @@ import (
 	"strings"
 
 	v1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
@@ -105,6 +107,11 @@ func LoadBalancerServiceName(instance *clv1alpha2.Instance) string {
 	return instance.Name + "-" + LabelPublicExposureValue
 }
 
+// PublicExposureNetworkPolicyName forges the name for a NetworkPolicy for public exposure.
+func PublicExposureNetworkPolicyName(instance *clv1alpha2.Instance) string {
+	return "crownlabs-allow-publicexposure-ingress-traffic-" + instance.Name
+}
+
 // ParseAnnotations parses a string like "key1=val1,key2=val2" into a map.
 func ParseAnnotations(raw string) (map[string]string, error) {
 	annotations := make(map[string]string)
@@ -126,4 +133,34 @@ func ParseAnnotations(raw string) (map[string]string, error) {
 		annotations[key] = value
 	}
 	return annotations, nil
+}
+
+// PublicExposureNetworkPolicy forges the NetworkPolicy object for a given instance.
+func PublicExposureNetworkPolicy(instance *clv1alpha2.Instance, netpol *netv1.NetworkPolicy) {
+	netpol.SetLabels(InstanceObjectLabels(netpol.GetLabels(), instance))
+
+	ingressPorts := []netv1.NetworkPolicyPort{}
+	// Use ports from Status, as they contain the actual assigned ports.
+	if instance.Status.PublicExposure != nil {
+		for _, p := range instance.Status.PublicExposure.Ports {
+			port := intstr.FromInt32(p.TargetPort)
+			proto := v1.ProtocolTCP
+			ingressPorts = append(ingressPorts, netv1.NetworkPolicyPort{
+				Port:     &port,
+				Protocol: &proto,
+			})
+		}
+	}
+
+	netpol.Spec = netv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"crownlabs.polito.it/instance": instance.Name,
+			},
+		},
+		Ingress: []netv1.NetworkPolicyIngressRule{{
+			Ports: ingressPorts,
+		}},
+		PolicyTypes: []netv1.PolicyType{netv1.PolicyTypeIngress},
+	}
 }
