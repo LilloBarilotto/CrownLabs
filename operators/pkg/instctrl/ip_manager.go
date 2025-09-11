@@ -58,6 +58,7 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 
+	log.Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
 	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureOpts.IPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
@@ -76,7 +77,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 		}
 
 		if preferredIP != "" {
-			log.Info("Found preferred IP from existing service", "ip", preferredIP)
+			log.Info("Found preferred IP from existing service", "ip", preferredIP, "service", existingSvc.Name)
 			// Move the preferred IP to the front of the pool to try it first.
 			found := false
 			for i, ip := range prioritizedIPPool {
@@ -168,6 +169,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c cli
 		}
 	}
 
+	log.Error(fmt.Errorf("no available IP can support all requested ports"), "IP/port assignment failed for instance", "instance", instance.Name)
 	return "", nil, fmt.Errorf("no available IP can support all requested ports")
 }
 

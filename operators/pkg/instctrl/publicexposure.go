@@ -52,11 +52,14 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		instance.Status.PublicExposure = &clv1alpha2.InstancePublicExposureStatus{}
 	}
 
+	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseProvisioning
+	instance.Status.PublicExposure.Message = "Provisioning public exposure: allocating IP and ports"
+
 	// Validate the public exposure request first.
 	if err := validatePublicExposureRequest(instance.Spec.PublicExposure.Ports); err != nil {
 		log.Error(err, "invalid public exposure request")
 		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
-		instance.Status.PublicExposure.Message = err.Error()
+		instance.Status.PublicExposure.Message = "Invalid public exposure request: " + err.Error()
 		return err
 	}
 
@@ -70,6 +73,8 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 
 	// If the service exists, check if its current spec matches the desired spec
 	if serviceExists {
+		log.V(1).Info("Existing LoadBalancer service detected for instance", "service", service.Name, "namespace", service.Namespace)
+
 		desiredPorts := instance.Spec.PublicExposure.Ports
 		currentPorts := []clv1alpha2.PublicServicePort{}
 		for _, p := range service.Spec.Ports {
@@ -108,15 +113,12 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		return err
 	}
 
-	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseProvisioning
-	instance.Status.PublicExposure.Message = "Provisioning in progress."
-
 	// 2. Find the best IP and ports to assign using the logic from ip_manager.go
 	targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
 	if err != nil {
 		log.Error(err, "failed to assign IP and ports for public exposure")
 		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
-		instance.Status.PublicExposure.Message = err.Error()
+		instance.Status.PublicExposure.Message = "Unable to allocate IP/ports: " + err.Error()
 		return err
 	}
 
