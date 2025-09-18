@@ -115,6 +115,7 @@ spec:
                       properties:
                         name:
                           description: A friendly name for the port.
+                          pattern: ^[a-z0-9]([-a-z0-9]{0,13}[a-z0-9])?$
                           type: string
                         port:
                           default: 0
@@ -279,6 +280,7 @@ spec:
                       properties:
                         name:
                           description: A friendly name for the port.
+                          pattern: ^[a-z0-9]([-a-z0-9]{0,13}[a-z0-9])?$
                           type: string
                         port:
                           default: 0

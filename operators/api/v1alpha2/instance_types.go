@@ -156,6 +156,7 @@ type InstancePublicExposure struct {
 // PublicServicePort defines the mapping of ports for a service.
 type PublicServicePort struct {
 	// A friendly name for the port.
+	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]{0,13}[a-z0-9])?$`
 	Name string `json:"name"`
 	// The public port to request. If 0 in spec, a random port from the ephemeral range will be assigned.
 	// +kubebuilder:validation:Minimum=0

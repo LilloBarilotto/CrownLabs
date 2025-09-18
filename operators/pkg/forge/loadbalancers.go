@@ -64,15 +64,11 @@ func ConfigureLoadBalancerAnnotationKeys(raw string) (s, ip string, err error) {
 func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.PublicServicePort) v1.ServiceSpec {
 	svcPorts := make([]v1.ServicePort, len(ports))
 	for i, p := range ports {
-		protocol := v1.ProtocolTCP
-		if p.Protocol == "UDP" {
-			protocol = v1.ProtocolUDP
-		}
 		svcPorts[i] = v1.ServicePort{
 			Name:       p.Name,
 			Port:       p.Port,
 			TargetPort: intstr.FromInt32(p.TargetPort),
-			Protocol:   protocol,
+			Protocol:   p.Protocol,
 		}
 	}
 	return v1.ServiceSpec{
@@ -148,10 +144,7 @@ func PublicExposureNetworkPolicy(instance *clv1alpha2.Instance, netpol *netv1.Ne
 	if instance.Status.PublicExposure != nil {
 		for _, p := range instance.Status.PublicExposure.Ports {
 			port := intstr.FromInt32(p.TargetPort)
-			protocol := v1.ProtocolTCP
-			if p.Protocol == "UDP" {
-				protocol = v1.ProtocolUDP
-			}
+			protocol := p.Protocol
 			ingressPorts = append(ingressPorts, netv1.NetworkPolicyPort{
 				Port:     &port,
 				Protocol: &protocol,
