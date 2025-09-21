@@ -18,6 +18,7 @@ mutation applyInstance(
         ports {
           name
           port
+          protocol
           targetPort
         }
       }
