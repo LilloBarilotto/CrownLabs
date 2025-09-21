@@ -291,28 +291,37 @@ var _ = Describe("Public Exposure Functions", func() {
 			})
 
 			It("Should error if requested port is already used on all IPs", func() {
-				conflictPort := int32(portBase + 999)
+				// Use a range of ports to saturate all IPs completely
+				basePort := int32(portBase + 1000)
+				portsPerIP := 50 // Create many ports per IP to ensure saturation
 
-				// Create services on all IPs using the exact same port we'll request
+				// Create multiple services on each IP to saturate the available ports
+				var createdServices []*v1.Service
 				for i, ip := range reconciler.PublicExposureOpts.IPPool {
-					svc := &v1.Service{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      fmt.Sprintf("blocker-svc-%d", i),
-							Namespace: namespace,
-							Labels:    forge.LoadBalancerServiceLabels(),
-							Annotations: map[string]string{
-								reconciler.PublicExposureOpts.LoadBalancerIPsKey: ip,
+					for j := 0; j < portsPerIP; j++ {
+						// Use the SAME port numbers on ALL IPs, not different ranges per IP
+						port := basePort + int32(j)
+						svc := &v1.Service{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      fmt.Sprintf("blocker-svc-%d-%d", i, j),
+								Namespace: namespace,
+								Labels:    forge.LoadBalancerServiceLabels(),
+								Annotations: map[string]string{
+									reconciler.PublicExposureOpts.LoadBalancerIPsKey: ip,
+								},
 							},
-						},
-						Spec: v1.ServiceSpec{
-							Type:  v1.ServiceTypeLoadBalancer,
-							Ports: []v1.ServicePort{{Name: "blocker", Port: conflictPort, TargetPort: intstr.FromInt(80)}},
-						},
+							Spec: v1.ServiceSpec{
+								Type:  v1.ServiceTypeLoadBalancer,
+								Ports: []v1.ServicePort{{Name: "blocker", Port: port, TargetPort: intstr.FromInt(80)}},
+							},
+						}
+						Expect(k8sClient.Create(ctx, svc)).To(Succeed())
+						createdServices = append(createdServices, svc)
 					}
-					Expect(k8sClient.Create(ctx, svc)).To(Succeed())
 				}
 
-				// Wait for services to be fully created and verify they appear in the used ports map
+				// Wait for all services to be created
+				expectedServiceCount := len(reconciler.PublicExposureOpts.IPPool) * portsPerIP
 				Eventually(func() int {
 					svcList := &v1.ServiceList{}
 					err := k8sClient.List(ctx, svcList, client.InNamespace(namespace), client.MatchingLabels(forge.LoadBalancerServiceLabels()))
@@ -320,28 +329,56 @@ var _ = Describe("Public Exposure Functions", func() {
 						return 0
 					}
 					return len(svcList.Items)
-				}, "10s", "100ms").Should(Equal(len(reconciler.PublicExposureOpts.IPPool)))
+				}, "10s", "100ms").Should(Equal(expectedServiceCount))
 
-				// Verify that the conflict port is actually detected as used on all IPs
+				// Verify that at least some conflict ports are actually detected as used on all IPs
 				Eventually(func() bool {
 					usedPortsByIP, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", &reconciler.PublicExposureOpts)
 					if err != nil {
 						return false
 					}
 
-					// Check that all IPs have the conflict port occupied
-					conflictCount := 0
+					// Print detailed debug information
+					GinkgoWriter.Printf("DEBUG: UsedPortsByIP map contains %d IPs\n", len(usedPortsByIP))
+					for ip, ports := range usedPortsByIP {
+						GinkgoWriter.Printf("DEBUG: IP %s has %d ports used\n", ip, len(ports))
+						conflictPortStart := basePort
+						conflictPortEnd := basePort + int32(portsPerIP)
+						conflictsFound := 0
+						for port := conflictPortStart; port < conflictPortEnd; port++ {
+							if ports[port] {
+								conflictsFound++
+							}
+						}
+						GinkgoWriter.Printf("DEBUG: IP %s has %d conflicts in range %d-%d\n", ip, conflictsFound, conflictPortStart, conflictPortEnd-1)
+					}
+
+					// Check that ALL IPs have the SAME port conflicts (since we create the same ports on all IPs)
+					allIPsHaveConflicts := true
+					expectedConflicts := portsPerIP
 					for _, ip := range reconciler.PublicExposureOpts.IPPool {
-						if ports, exists := usedPortsByIP[ip]; exists {
-							if ports[conflictPort] {
-								conflictCount++
+						if ports, exists := usedPortsByIP[ip]; !exists {
+							allIPsHaveConflicts = false
+							break
+						} else {
+							// Count conflicts in our specific range
+							conflictsFound := 0
+							for port := basePort; port < basePort+int32(portsPerIP); port++ {
+								if ports[port] {
+									conflictsFound++
+								}
+							}
+							if conflictsFound < expectedConflicts {
+								allIPsHaveConflicts = false
+								break
 							}
 						}
 					}
-					return conflictCount == len(reconciler.PublicExposureOpts.IPPool)
-				}, "10s", "100ms").Should(BeTrue(), "Expected conflict port to be detected as used on all IPs")
+					return allIPsHaveConflicts
+				}, "15s", "500ms").Should(BeTrue(), "Expected significant port conflicts to be detected on all IPs")
 
-				// Request the EXACT same port that is blocked on all IPs
+				// Now request a specific port that we know is occupied on all IPs
+				conflictPort := basePort + int32(portsPerIP/2) // Pick a port from the middle of our occupied range
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{{Name: "conflict", Port: conflictPort, TargetPort: 80}}
 				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
 				ctx, _ = clctx.InstanceInto(ctx, instance)
