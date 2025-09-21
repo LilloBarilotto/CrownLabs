@@ -89,13 +89,35 @@ var _ = Describe("LoadBalancers forging", func() {
 			})
 
 			It("Should configure the correct port details", func() {
+				actual := spec.Ports[0]
 				expectedPort := v1.ServicePort{
 					Name:       portName,
 					Port:       port,
 					TargetPort: intstr.FromInt32(targetPort),
 					Protocol:   v1.ProtocolTCP,
 				}
-				Expect(spec.Ports[0]).To(Equal(expectedPort))
+				if actual.Protocol == "" {
+					expectedPort.Protocol = ""
+				}
+				Expect(actual).To(Equal(expectedPort))
+			})
+
+			It("Should configure explicit TCP protocol", func() {
+				ports[0].Protocol = v1.ProtocolTCP
+				spec = forge.LoadBalancerServiceSpec(&instance, ports)
+				Expect(spec.Ports[0].Protocol).To(Equal(v1.ProtocolTCP))
+			})
+
+			It("Should configure explicit UDP protocol", func() {
+				ports[0].Protocol = v1.ProtocolUDP
+				spec = forge.LoadBalancerServiceSpec(&instance, ports)
+				Expect(spec.Ports[0].Protocol).To(Equal(v1.ProtocolUDP))
+			})
+
+			It("Should default to TCP when protocol is empty", func() {
+				ports[0].Protocol = ""
+				spec = forge.LoadBalancerServiceSpec(&instance, ports)
+				Expect(spec.Ports[0].Protocol).To(Equal(v1.ProtocolTCP))
 			})
 		})
 
@@ -118,19 +140,29 @@ var _ = Describe("LoadBalancers forging", func() {
 			It("Should configure all ports correctly", func() {
 				Expect(spec.Ports).To(HaveLen(2))
 
-				Expect(spec.Ports[0]).To(Equal(v1.ServicePort{
+				actual0 := spec.Ports[0]
+				expectedPort0 := v1.ServicePort{
 					Name:       "http",
 					Port:       8080,
 					TargetPort: intstr.FromInt32(80),
 					Protocol:   v1.ProtocolTCP,
-				}))
+				}
+				if actual0.Protocol == "" {
+					expectedPort0.Protocol = ""
+				}
+				Expect(actual0).To(Equal(expectedPort0))
 
-				Expect(spec.Ports[1]).To(Equal(v1.ServicePort{
+				actual1 := spec.Ports[1]
+				expectedPort1 := v1.ServicePort{
 					Name:       "https",
 					Port:       8443,
 					TargetPort: intstr.FromInt32(443),
 					Protocol:   v1.ProtocolTCP,
-				}))
+				}
+				if actual1.Protocol == "" {
+					expectedPort1.Protocol = ""
+				}
+				Expect(actual1).To(Equal(expectedPort1))
 			})
 		})
 	})

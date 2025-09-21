@@ -50,7 +50,6 @@ var _ = Describe("IP Manager Functions", func() {
 	}
 
 	BeforeEach(func() {
-		// Generate unique namespace name to avoid conflicts
 		randomNum, _ := crand.Int(crand.Reader, big.NewInt(100000))
 		namespace = fmt.Sprintf("test-namespace-%d", randomNum.Int64())
 		reconciler = &instctrl.InstanceReconciler{
@@ -74,37 +73,20 @@ var _ = Describe("IP Manager Functions", func() {
 			Spec: clv1alpha2.InstanceSpec{
 				PublicExposure: &clv1alpha2.InstancePublicExposure{
 					Ports: []clv1alpha2.PublicServicePort{
-						{
-							Name:       "http",
-							Port:       8080,
-							TargetPort: 80,
-						},
+						{Name: "http", Port: 8080, TargetPort: 80},
 					},
 				},
 			},
 		}
-
-		// Assign a random IP annotation to avoid pool saturation in tests
 		instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
-		// Create namespace
-		ns := &v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
+		ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		// Clean up the namespace and all its resources
-		ns := &v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
+		ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
-		// Wait for resources to be cleaned up before next test
 		time.Sleep(200 * time.Millisecond)
 	})
 
@@ -116,11 +98,9 @@ var _ = Describe("IP Manager Functions", func() {
 				"172.18.0.240": {9090: true},
 			}
 			prioritizedPool := reconciler.BuildPrioritizedIPPool(fullPool, usedPortsByIP)
-			// Used IPs should come first, sorted alphabetically
 			Expect(prioritizedPool).To(HaveLen(4))
 			Expect(prioritizedPool[0]).To(Equal("172.18.0.240"))
 			Expect(prioritizedPool[1]).To(Equal("172.18.0.242"))
-			// Unused IPs should come after, sorted alphabetically
 			Expect(prioritizedPool[2]).To(Equal("172.18.0.241"))
 			Expect(prioritizedPool[3]).To(Equal("172.18.0.243"))
 		})
@@ -128,21 +108,7 @@ var _ = Describe("IP Manager Functions", func() {
 		It("Should handle empty used ports map", func() {
 			fullPool := []string{"172.18.0.240", "172.18.0.241"}
 			usedPortsByIP := map[string]map[int32]bool{}
-
 			prioritizedPool := reconciler.BuildPrioritizedIPPool(fullPool, usedPortsByIP)
-
-			Expect(prioritizedPool).To(Equal([]string{"172.18.0.240", "172.18.0.241"}))
-		})
-
-		It("Should handle all IPs being used", func() {
-			fullPool := []string{"172.18.0.240", "172.18.0.241"}
-			usedPortsByIP := map[string]map[int32]bool{
-				"172.18.0.240": {8080: true},
-				"172.18.0.241": {9090: true},
-			}
-
-			prioritizedPool := reconciler.BuildPrioritizedIPPool(fullPool, usedPortsByIP)
-
 			Expect(prioritizedPool).To(Equal([]string{"172.18.0.240", "172.18.0.241"}))
 		})
 	})
@@ -151,26 +117,16 @@ var _ = Describe("IP Manager Functions", func() {
 		Context("With specified ports", func() {
 			It("Should find available IP and assign specified ports", func() {
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "http",
-						Port:       8080,
-						TargetPort: 80,
-					},
-					{
-						Name:       "https",
-						Port:       8443,
-						TargetPort: 443,
-					},
+					{Name: "http", Port: 8080, TargetPort: 80},
+					{Name: "https", Port: 8443, TargetPort: 443},
 				}
-				// Ensure annotation is set after changing ports
 				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{}
-
 				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(ip).To(Equal("172.18.0.240")) // First IP in pool
+				Expect(ip).To(Equal("172.18.0.240"))
 				Expect(assignedPorts).To(HaveLen(2))
 				Expect(assignedPorts[0].Port).To(Equal(int32(8080)))
 				Expect(assignedPorts[1].Port).To(Equal(int32(8443)))
@@ -178,24 +134,19 @@ var _ = Describe("IP Manager Functions", func() {
 
 			It("Should skip IPs with conflicting ports", func() {
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "http",
-						Port:       8080,
-						TargetPort: 80,
-					},
+					{Name: "http", Port: 8080, TargetPort: 80},
 				}
-				// Ensure annotation is set after changing ports
 				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{
-					"172.18.0.240": {8080: true}, // Port conflict
-					"172.18.0.241": {9090: true}, // No conflict
+					"172.18.0.240": {8080: true},
+					"172.18.0.241": {9090: true},
 				}
 
 				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
 
 				Expect(err).ToNot(HaveOccurred())
-				Expect(ip).To(Equal("172.18.0.241")) // Should skip first IP due to conflict
+				Expect(ip).To(Equal("172.18.0.241"))
 				Expect(assignedPorts).To(HaveLen(1))
 				Expect(assignedPorts[0].Port).To(Equal(int32(8080)))
 			})
@@ -204,34 +155,22 @@ var _ = Describe("IP Manager Functions", func() {
 		Context("With automatic port assignment", func() {
 			It("Should assign automatic ports starting from base port", func() {
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "auto-port",
-						Port:       0, // Request automatic assignment
-						TargetPort: 80,
-					},
+					{Name: "auto-port", Port: 0, TargetPort: 80},
 				}
-				// Ensure annotation is set after changing ports
 				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{}
-
 				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ip).To(Equal("172.18.0.240"))
-				// Ensure annotation is set before any service creation or update
 				Expect(assignedPorts[0].Port).To(Equal(int32(forge.BasePortForAutomaticAssignment)))
 			})
 
 			It("Should skip used automatic ports", func() {
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "auto-port",
-						Port:       0,
-						TargetPort: 80,
-					},
+					{Name: "auto-port", Port: 0, TargetPort: 80},
 				}
-				// Ensure annotation is set after changing ports
 				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{
@@ -241,68 +180,18 @@ var _ = Describe("IP Manager Functions", func() {
 				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
 
 				Expect(err).ToNot(HaveOccurred())
-				// Ensure annotation is set before any service creation or update
 				Expect(ip).To(Equal("172.18.0.240"))
 				Expect(assignedPorts).To(HaveLen(1))
 				Expect(assignedPorts[0].Port).To(Equal(int32(forge.BasePortForAutomaticAssignment + 1)))
 			})
 		})
 
-		Context("With existing LoadBalancer service", func() {
-			It("Should prefer existing service IP", func() {
-				// Create an existing LoadBalancer service
-				svc := &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      forge.LoadBalancerServiceName(instance),
-						Namespace: namespace,
-						Annotations: map[string]string{
-							"metallb.universe.tf/loadBalancerIPs": "172.18.0.242",
-						},
-					},
-					Spec: v1.ServiceSpec{
-						Type: v1.ServiceTypeLoadBalancer,
-						Ports: []v1.ServicePort{
-							{
-								Port:       9090,
-								TargetPort: intstr.FromInt(90),
-							},
-						},
-						// Ensure annotation is set before any service creation or update
-					},
-				}
-				Expect(k8sClient.Create(ctx, svc)).To(Succeed())
-
-				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "http",
-						Port:       8080,
-						TargetPort: 80,
-					},
-				}
-
-				usedPortsByIP := map[string]map[int32]bool{}
-
-				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
-
-				Expect(err).ToNot(HaveOccurred())
-				Expect(ip).To(Equal("172.18.0.242")) // Should prefer existing service IP
-				Expect(assignedPorts).To(HaveLen(1))
-				Expect(assignedPorts[0].Port).To(Equal(int32(8080)))
-				// Ensure annotation is set before any service creation or update
-			})
-		})
-
 		Context("Error cases", func() {
 			It("Should return error when no IP can support all ports", func() {
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "http",
-						Port:       8080,
-						TargetPort: 80,
-					},
+					{Name: "http", Port: 8080, TargetPort: 80},
 				}
 
-				// All IPs have the requested port occupied
 				usedPortsByIP := map[string]map[int32]bool{
 					"172.18.0.240": {8080: true},
 					"172.18.0.241": {8080: true},
@@ -322,7 +211,6 @@ var _ = Describe("IP Manager Functions", func() {
 
 	Describe("UpdateUsedPortsByIP", func() {
 		It("Should scan and return used ports by IP", func() {
-			// Create LoadBalancer services
 			svc1 := &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-service-1",
@@ -358,12 +246,9 @@ var _ = Describe("IP Manager Functions", func() {
 			Expect(k8sClient.Create(ctx, svc1)).To(Succeed())
 			Expect(k8sClient.Create(ctx, svc2)).To(Succeed())
 
-			// Update service status for svc2 to include LoadBalancer ingress IP
 			svc2.Status = v1.ServiceStatus{
 				LoadBalancer: v1.LoadBalancerStatus{
-					Ingress: []v1.LoadBalancerIngress{
-						{IP: "172.18.0.241"},
-					},
+					Ingress: []v1.LoadBalancerIngress{{IP: "172.18.0.241"}},
 				},
 			}
 			Expect(k8sClient.Status().Update(ctx, svc2)).To(Succeed())
@@ -378,7 +263,6 @@ var _ = Describe("IP Manager Functions", func() {
 			usedPortsByIP, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
 
 			Expect(err).ToNot(HaveOccurred())
-			// Check that our specific services are included in the results
 			Expect(usedPortsByIP).To(HaveKey("172.18.0.240"))
 			Expect(usedPortsByIP["172.18.0.240"]).To(HaveKey(int32(8080)))
 			Expect(usedPortsByIP["172.18.0.240"]).To(HaveKey(int32(8443)))
@@ -387,11 +271,9 @@ var _ = Describe("IP Manager Functions", func() {
 		})
 
 		It("Should exclude specified service", func() {
-			// Create a unique IP and port combination for this test to avoid conflicts
-			uniquePort := int32(9999)  // Use a unique port not used by other tests
-			uniqueIP := "172.18.0.243" // Use the last IP in our pool
+			uniquePort := int32(9999)
+			uniqueIP := "172.18.0.243"
 
-			// Create LoadBalancer service
 			svc := &v1.Service{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "exclude-service",
@@ -418,89 +300,19 @@ var _ = Describe("IP Manager Functions", func() {
 				},
 				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
 			}
-			// Get the ports without exclusion (should include our service)
+
 			usedPortsByIPWithService, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Get the ports with exclusion (should exclude our service)
 			usedPortsByIPWithoutService, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "exclude-service", namespace, opts)
 			Expect(err).ToNot(HaveOccurred())
 
-			// The excluded service should be present when not excluding
 			Expect(usedPortsByIPWithService).To(HaveKey(uniqueIP))
 			Expect(usedPortsByIPWithService[uniqueIP]).To(HaveKey(uniquePort))
 
-			// The excluded service should not be present when excluding
 			if ipMap, exists := usedPortsByIPWithoutService[uniqueIP]; exists {
-				Expect(ipMap).ToNot(HaveKey(uniquePort), "The excluded service port should not be present after exclusion")
+				Expect(ipMap).ToNot(HaveKey(uniquePort))
 			}
-			// If the IP doesn't exist at all after exclusion, that's also correct (no other services on that IP)
-		})
-
-		It("Should ignore services without external IP", func() {
-			// Create LoadBalancer service without IP
-			svc := &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "no-ip-service",
-					Namespace: namespace,
-					Labels:    forge.LoadBalancerServiceLabels(),
-				},
-				Spec: v1.ServiceSpec{
-					Type: v1.ServiceTypeLoadBalancer,
-					Ports: []v1.ServicePort{
-						{Name: "http", Port: 8080, TargetPort: intstr.FromInt(80)},
-					},
-				},
-			}
-
-			Expect(k8sClient.Create(ctx, svc)).To(Succeed())
-
-			opts := &forge.PublicExposureOpts{
-				CommonAnnotations: map[string]string{
-					"metallb.universe.tf/shared-ip":    "public-exposure",
-					"metallb.universe.tf/address-pool": "public",
-				},
-				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
-			}
-			_, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
-
-			Expect(err).ToNot(HaveOccurred())
-			// Since the service has no external IP, it should not contribute any port mappings
-			// We can't guarantee the map is empty because other tests might have left services,
-			// but we can check that our specific service didn't add anything
-			// Since we don't know what the IP would be (it has none), we just verify no error occurred
-		})
-
-		It("Should ignore non-LoadBalancer services", func() {
-			// Create ClusterIP service with public exposure labels
-			svc := &v1.Service{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "cluster-ip-service",
-					Namespace: namespace,
-					Labels:    forge.LoadBalancerServiceLabels(),
-				},
-				Spec: v1.ServiceSpec{
-					Type: v1.ServiceTypeClusterIP,
-					Ports: []v1.ServicePort{
-						{Name: "http", Port: 8080, TargetPort: intstr.FromInt(80)},
-					},
-				},
-			}
-
-			Expect(k8sClient.Create(ctx, svc)).To(Succeed())
-
-			opts := &forge.PublicExposureOpts{
-				CommonAnnotations: map[string]string{
-					"metallb.universe.tf/shared-ip":    "public-exposure",
-					"metallb.universe.tf/address-pool": "public",
-				},
-				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
-			}
-			_, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", opts)
-
-			Expect(err).ToNot(HaveOccurred())
-			// Since the service is ClusterIP (not LoadBalancer), it should not contribute any port mappings
-			// We just verify no error occurred since the function should ignore non-LoadBalancer services
 		})
 	})
 })

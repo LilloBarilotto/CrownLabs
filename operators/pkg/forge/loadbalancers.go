@@ -64,11 +64,15 @@ func ConfigureLoadBalancerAnnotationKeys(raw string) (s, ip string, err error) {
 func LoadBalancerServiceSpec(instance *clv1alpha2.Instance, ports []clv1alpha2.PublicServicePort) v1.ServiceSpec {
 	svcPorts := make([]v1.ServicePort, len(ports))
 	for i, p := range ports {
+		protocol := p.Protocol
+		if protocol == "" {
+			protocol = v1.ProtocolTCP
+		}
 		svcPorts[i] = v1.ServicePort{
 			Name:       p.Name,
 			Port:       p.Port,
 			TargetPort: intstr.FromInt32(p.TargetPort),
-			Protocol:   p.Protocol,
+			Protocol:   protocol,
 		}
 	}
 	return v1.ServiceSpec{

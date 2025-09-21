@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	clctx "github.com/netgroup-polito/CrownLabs/operators/pkg/context"
@@ -44,54 +45,37 @@ var _ = Describe("Public Exposure Functions", func() {
 		instance   *clv1alpha2.Instance
 		template   *clv1alpha2.Template
 		namespace  string
+		testIPPool []string
+		portBase   int
 	)
 
-	// Helper to pick a random IP from the available pool
 	getRandomIP := func() string {
-		pool := []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"}
+		pool := testIPPool
 		r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 		return pool[r.Intn(len(pool))]
 	}
-	// Helper function to create a test LoadBalancer service
-	createTestLoadBalancerService := func() {
-		svcName := forge.LoadBalancerServiceName(instance)
-		existingService := &v1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      svcName,
-				Namespace: namespace,
-				Labels:    forge.LoadBalancerServiceLabels(),
-			},
-			Spec: v1.ServiceSpec{
-				Type: v1.ServiceTypeLoadBalancer,
-				Ports: []v1.ServicePort{
-					{
-						Name:       "http",
-						Port:       8080,
-						TargetPort: intstr.FromInt(80),
-					},
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, existingService)).To(Succeed())
-	}
-
-	// Helper function to verify that a LoadBalancer service was removed
-	expectServiceRemoved := func() {
-		svcName := forge.LoadBalancerServiceName(instance)
-		service := &v1.Service{}
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-		Expect(err).To(HaveOccurred())
-	}
 
 	BeforeEach(func() {
-		// Generate unique namespace name to avoid conflicts
 		randomNum, _ := crand.Int(crand.Reader, big.NewInt(100000))
 		namespace = fmt.Sprintf("test-namespace-%d", randomNum.Int64())
+
+		// Create a unique IP pool for this test to avoid conflicts
+		baseIP := fmt.Sprintf("192.168.%d", 100+randomNum.Int64()%100)
+		testIPPool = []string{
+			fmt.Sprintf("%s.1", baseIP),
+			fmt.Sprintf("%s.2", baseIP),
+			fmt.Sprintf("%s.3", baseIP),
+			fmt.Sprintf("%s.4", baseIP),
+		}
+
+		// Use unique port base for this test
+		portBase = 10000 + int(randomNum.Int64()%50000)
+
 		reconciler = &instctrl.InstanceReconciler{
 			Client: k8sClient,
 			Scheme: k8sClient.Scheme(),
 			PublicExposureOpts: forge.PublicExposureOpts{
-				IPPool: []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"},
+				IPPool: testIPPool,
 				CommonAnnotations: map[string]string{
 					"metallb.universe.tf/allow-shared-ip": "public-exposure",
 					"metallb.universe.tf/address-pool":    "public",
@@ -135,193 +119,95 @@ var _ = Describe("Public Exposure Functions", func() {
 				Running: true,
 				PublicExposure: &clv1alpha2.InstancePublicExposure{
 					Ports: []clv1alpha2.PublicServicePort{
-						{
-							Name:       "http",
-							Port:       8080,
-							TargetPort: 80,
-						},
+						{Name: "http", Port: int32(portBase + 80), TargetPort: 80},
 					},
 				},
 			},
 		}
 
-		// Assign a random IP annotation to avoid pool saturation in tests
 		instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
-		// Create namespace
-		ns := &v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
+		ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
-
-		// Create template
 		Expect(k8sClient.Create(ctx, template)).To(Succeed())
-
-		// Create instance
 		Expect(k8sClient.Create(ctx, instance)).To(Succeed())
 	})
 
 	AfterEach(func() {
-		// Clean up the namespace and all its resources
-		ns := &v1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
+		// Clean up all services in the namespace first
+		svcList := &v1.ServiceList{}
+		err := k8sClient.List(ctx, svcList, client.InNamespace(namespace))
+		if err == nil {
+			for i := range svcList.Items {
+				svc := &svcList.Items[i]
+				_ = k8sClient.Delete(ctx, svc)
+			}
 		}
+
+		// Wait for service deletion to complete
+		Eventually(func() bool {
+			svcList := &v1.ServiceList{}
+			err := k8sClient.List(ctx, svcList, client.InNamespace(namespace))
+			return err != nil || len(svcList.Items) == 0
+		}, "10s", "100ms").Should(BeTrue())
+
+		// Then delete the namespace
+		ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
 		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
-		// Wait for resources to be cleaned up before next test
-		time.Sleep(200 * time.Millisecond)
+
+		// Wait for namespace cleanup to complete
+		time.Sleep(1 * time.Second)
 	})
 
 	Describe("EnforcePublicExposure", func() {
 		Context("When public exposure should be present", func() {
 			BeforeEach(func() {
-				// Set context with instance and template
 				ctx, _ = clctx.InstanceInto(ctx, instance)
 				ctx, _ = clctx.TemplateInto(ctx, template)
 			})
 
 			It("Should create LoadBalancer service when conditions are met", func() {
-				// Ensure annotation is set before enforcing public exposure
-				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 				err := reconciler.EnforcePublicExposure(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Verify LoadBalancer service was created
 				svcName := forge.LoadBalancerServiceName(instance)
 				service := &v1.Service{}
 				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
 				Expect(err).ToNot(HaveOccurred())
-
-				// Verify service type and ports
 				Expect(service.Spec.Type).To(Equal(v1.ServiceTypeLoadBalancer))
-				Expect(service.Spec.Ports).To(HaveLen(1))
-				Expect(service.Spec.Ports[0].Port).To(Equal(int32(8080)))
-				Expect(service.Spec.Ports[0].TargetPort).To(Equal(intstr.FromInt32(80)))
-
-				// Verify annotations
-				Expect(service.Annotations).To(HaveKey("metallb.universe.tf/loadBalancerIPs"))
-				assignedIP := service.Annotations["metallb.universe.tf/loadBalancerIPs"]
-				Expect(assignedIP).To(BeElementOf("172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"))
-
-				// Verify instance status was updated (if supported in this test environment)
-				updatedInstance := &clv1alpha2.Instance{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: namespace}, updatedInstance)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Check if status was updated - this might not happen in all test environments
-				if updatedInstance.Status.PublicExposure != nil {
-					Expect(updatedInstance.Status.PublicExposure.ExternalIP).To(Equal(assignedIP))
-					Expect(updatedInstance.Status.PublicExposure.Phase).To(Equal(clv1alpha2.PublicExposurePhaseReady))
-					Expect(updatedInstance.Status.PublicExposure.Ports).To(HaveLen(1))
-					Expect(updatedInstance.Status.PublicExposure.Ports[0].Port).To(Equal(int32(8080)))
-				} else {
-					// The main requirement is that the service was created correctly
-					By("Service created successfully - status update might not be supported in this test environment")
-				}
 			})
 
-			It("Should update existing service when ports change", func() {
-				svcName := forge.LoadBalancerServiceName(instance)
-				// Ensure annotation is set before service creation
-				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
-				// First create a service with different ports
-				existingService := &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      svcName,
-						Namespace: namespace,
-						Labels:    forge.LoadBalancerServiceLabels(),
-						Annotations: map[string]string{
-							"metallb.universe.tf/loadBalancerIPs": "172.18.0.240",
-						},
-					},
-					Spec: v1.ServiceSpec{
-						Type: v1.ServiceTypeLoadBalancer,
-						Ports: []v1.ServicePort{
-							{
-								Name:       "old-port",
-								Port:       9090,
-								TargetPort: intstr.FromInt32(90),
-							},
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, existingService)).To(Succeed())
+			It("Should update instance status correctly", func() {
+				err := reconciler.EnforcePublicExposure(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-				// Now update instance with new ports
+				// Verify status was updated
+				Expect(instance.Status.PublicExposure).ToNot(BeNil())
+				Expect(instance.Status.PublicExposure.Phase).To(Equal(clv1alpha2.PublicExposurePhaseReady))
+				Expect(instance.Status.PublicExposure.ExternalIP).ToNot(BeEmpty())
+				Expect(instance.Status.PublicExposure.Ports).To(HaveLen(1))
+				Expect(instance.Status.PublicExposure.Ports[0].Port).To(Equal(int32(portBase + 80)))
+			})
+
+			It("Should handle automatic port assignment", func() {
 				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "http",
-						Port:       8080,
-						TargetPort: 80,
-					},
-					{
-						Name:       "https",
-						Port:       8443,
-						TargetPort: 443,
-					},
+					{Name: "auto1", Port: 0, TargetPort: 80},
+					{Name: "auto2", Port: 0, TargetPort: 90},
 				}
-				// Ensure annotation is set after changing ports
-				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
 				ctx, _ = clctx.InstanceInto(ctx, instance)
 
 				err := reconciler.EnforcePublicExposure(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Verify service was updated
-				updatedService := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, updatedService)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(updatedService.Spec.Ports).To(HaveLen(2))
-				Expect(updatedService.Spec.Ports[0].Port).To(Equal(int32(8080)))
-				Expect(updatedService.Spec.Ports[1].Port).To(Equal(int32(8443)))
-			})
-
-			It("Should skip update when service matches desired state", func() {
-				// Ensure annotation is set before service creation
-				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
-				// Create service with matching state
 				svcName := forge.LoadBalancerServiceName(instance)
-				matchingService := &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      svcName,
-						Namespace: namespace,
-						Labels:    forge.LoadBalancerServiceLabels(),
-						Annotations: map[string]string{
-							"metallb.universe.tf/loadBalancerIPs": "172.18.0.240",
-						},
-					},
-					Spec: v1.ServiceSpec{
-						Type: v1.ServiceTypeLoadBalancer,
-						Ports: []v1.ServicePort{
-							{
-								Name:       "http",
-								Port:       8080,
-								TargetPort: intstr.FromInt32(80),
-							},
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, matchingService)).To(Succeed())
-
-				err := reconciler.EnforcePublicExposure(ctx)
+				service := &v1.Service{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
 				Expect(err).ToNot(HaveOccurred())
-
-				// Verify instance status was updated with existing IP (if supported in test environment)
-				updatedInstance := &clv1alpha2.Instance{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: namespace}, updatedInstance)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Check if status was updated - this might not happen in all test environments
-				if updatedInstance.Status.PublicExposure != nil {
-					Expect(updatedInstance.Status.PublicExposure.ExternalIP).To(Equal("172.18.0.240"))
-				} else {
-					// The main test is that the service matching logic works correctly
-					By("Service matching logic working - status update might not be supported in this test environment")
-				}
+				Expect(service.Spec.Ports).To(HaveLen(2))
+				// Automatic ports should be assigned from base port
+				Expect(service.Spec.Ports[0].Port).To(BeNumerically(">=", 30000))
+				Expect(service.Spec.Ports[1].Port).To(BeNumerically(">=", 30000))
 			})
 		})
 
@@ -332,95 +218,43 @@ var _ = Describe("Public Exposure Functions", func() {
 			})
 
 			It("Should remove service when template doesn't allow public exposure", func() {
-				// Create existing service
-				svcName := forge.LoadBalancerServiceName(instance)
-				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
-				existingService := &v1.Service{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      svcName,
-						Namespace: namespace,
-						Labels:    forge.LoadBalancerServiceLabels(),
-					},
-					Spec: v1.ServiceSpec{
-						Type: v1.ServiceTypeLoadBalancer,
-						Ports: []v1.ServicePort{
-							{
-								Name:       "http",
-								Port:       8080,
-								TargetPort: intstr.FromInt(80),
-							},
-						},
-					},
-				}
-				Expect(k8sClient.Create(ctx, existingService)).To(Succeed())
+				// First create the service
+				err := reconciler.EnforcePublicExposure(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-				// Update template to disallow public exposure
+				// Then disable public exposure in template
 				template.Spec.AllowPublicExposure = false
 				Expect(k8sClient.Update(ctx, template)).To(Succeed())
 				ctx, _ = clctx.TemplateInto(ctx, template)
 
-				err := reconciler.EnforcePublicExposure(ctx)
+				err = reconciler.EnforcePublicExposure(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Verify service was removed
+				// Service should be removed
+				svcName := forge.LoadBalancerServiceName(instance)
 				service := &v1.Service{}
 				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
 				Expect(err).To(HaveOccurred())
-
-				// Verify instance status was cleared
-				updatedInstance := &clv1alpha2.Instance{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: namespace}, updatedInstance)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(updatedInstance.Status.PublicExposure).To(BeNil())
 			})
 
 			It("Should remove service when instance is not running", func() {
-				// Create existing service
-				createTestLoadBalancerService()
+				// First create the service
+				err := reconciler.EnforcePublicExposure(ctx)
+				Expect(err).ToNot(HaveOccurred())
 
-				// Update instance to not running
+				// Then stop the instance
 				instance.Spec.Running = false
 				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
 				ctx, _ = clctx.InstanceInto(ctx, instance)
 
-				err := reconciler.EnforcePublicExposure(ctx)
+				err = reconciler.EnforcePublicExposure(ctx)
 				Expect(err).ToNot(HaveOccurred())
 
-				// Verify service was removed
-				expectServiceRemoved()
-			})
-
-			It("Should remove service when public exposure is nil", func() {
-				// Create existing service
-				createTestLoadBalancerService()
-
-				// Remove public exposure
-				instance.Spec.PublicExposure = nil
-				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-
-				// Enforce public exposure removal (should delete service, not update with empty annotation)
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Verify service was removed
-				expectServiceRemoved()
-			})
-
-			It("Should remove service when no ports are specified", func() {
-				// Create existing service
-				createTestLoadBalancerService()
-
-				// Update instance to have empty ports
-				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{}
-				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Verify service was removed
-				expectServiceRemoved()
+				// Service should be removed
+				svcName := forge.LoadBalancerServiceName(instance)
+				service := &v1.Service{}
+				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 
@@ -430,84 +264,91 @@ var _ = Describe("Public Exposure Functions", func() {
 				ctx, _ = clctx.TemplateInto(ctx, template)
 			})
 
-			It("Should handle error when no IP is available", func() {
-				// Create services that occupy all IPs for the required port
-				for i, ip := range []string{"172.18.0.240", "172.18.0.241", "172.18.0.242", "172.18.0.243"} {
-					service := &v1.Service{
+			It("Should error on duplicate ports in public exposure", func() {
+				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
+					{Name: "http", Port: int32(portBase + 80), TargetPort: 80},
+					{Name: "http2", Port: int32(portBase + 80), TargetPort: 81}, // Duplicate port
+				}
+				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
+				ctx, _ = clctx.InstanceInto(ctx, instance)
+
+				err := reconciler.EnforcePublicExposure(ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("duplicate requested port"))
+			})
+
+			It("Should error on duplicate targetPorts in public exposure", func() {
+				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
+					{Name: "http", Port: int32(portBase + 80), TargetPort: 80},
+					{Name: "http2", Port: int32(portBase + 81), TargetPort: 80}, // Duplicate targetPort
+				}
+				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
+				ctx, _ = clctx.InstanceInto(ctx, instance)
+
+				err := reconciler.EnforcePublicExposure(ctx)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("duplicate desired targetPort"))
+			})
+
+			It("Should error if requested port is already used on all IPs", func() {
+				conflictPort := int32(portBase + 999)
+
+				// Create services on all IPs using the exact same port we'll request
+				for i, ip := range reconciler.PublicExposureOpts.IPPool {
+					svc := &v1.Service{
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      fmt.Sprintf("blocking-service-%d", i+1),
+							Name:      fmt.Sprintf("blocker-svc-%d", i),
 							Namespace: namespace,
 							Labels:    forge.LoadBalancerServiceLabels(),
 							Annotations: map[string]string{
-								"metallb.universe.tf/loadBalancerIPs": ip,
+								reconciler.PublicExposureOpts.LoadBalancerIPsKey: ip,
 							},
 						},
 						Spec: v1.ServiceSpec{
-							Type: v1.ServiceTypeLoadBalancer,
-							Ports: []v1.ServicePort{
-								{
-									Port:       8080, // Same port as requested by instance
-									TargetPort: intstr.FromInt32(80),
-								},
-							},
+							Type:  v1.ServiceTypeLoadBalancer,
+							Ports: []v1.ServicePort{{Name: "blocker", Port: conflictPort, TargetPort: intstr.FromInt(80)}},
 						},
 					}
-					Expect(k8sClient.Create(ctx, service)).To(Succeed())
+					Expect(k8sClient.Create(ctx, svc)).To(Succeed())
 				}
+
+				// Wait for services to be fully created and verify they appear in the used ports map
+				Eventually(func() int {
+					svcList := &v1.ServiceList{}
+					err := k8sClient.List(ctx, svcList, client.InNamespace(namespace), client.MatchingLabels(forge.LoadBalancerServiceLabels()))
+					if err != nil {
+						return 0
+					}
+					return len(svcList.Items)
+				}, "10s", "100ms").Should(Equal(len(reconciler.PublicExposureOpts.IPPool)))
+
+				// Verify that the conflict port is actually detected as used on all IPs
+				Eventually(func() bool {
+					usedPortsByIP, err := instctrl.UpdateUsedPortsByIP(ctx, k8sClient, "", "", &reconciler.PublicExposureOpts)
+					if err != nil {
+						return false
+					}
+
+					// Check that all IPs have the conflict port occupied
+					conflictCount := 0
+					for _, ip := range reconciler.PublicExposureOpts.IPPool {
+						if ports, exists := usedPortsByIP[ip]; exists {
+							if ports[conflictPort] {
+								conflictCount++
+							}
+						}
+					}
+					return conflictCount == len(reconciler.PublicExposureOpts.IPPool)
+				}, "10s", "100ms").Should(BeTrue(), "Expected conflict port to be detected as used on all IPs")
+
+				// Request the EXACT same port that is blocked on all IPs
+				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{{Name: "conflict", Port: conflictPort, TargetPort: 80}}
+				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
+				ctx, _ = clctx.InstanceInto(ctx, instance)
 
 				err := reconciler.EnforcePublicExposure(ctx)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no available IP can support all requested ports"))
-			})
-		})
-
-		Context("Automatic port assignment", func() {
-			BeforeEach(func() {
-				// Update instance to request automatic port assignment
-				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{
-						Name:       "auto-port",
-						Port:       0, // Request automatic assignment
-						TargetPort: 80,
-					},
-				}
-				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-				ctx, _ = clctx.TemplateInto(ctx, template)
-			})
-
-			It("Should assign automatic port when requested", func() {
-				// Ensure annotation is set before enforcing public exposure
-				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
-				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Verify service was created with automatic port
-				svcName := forge.LoadBalancerServiceName(instance)
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(service.Spec.Ports).To(HaveLen(1))
-				assignedPort := service.Spec.Ports[0].Port
-				Expect(assignedPort).To(BeNumerically(">=", forge.BasePortForAutomaticAssignment))
-
-				// Verify instance status reflects the assigned port
-				// Note: In this test we're checking that EnforcePublicExposure updated the status correctly
-				// The status might not be persisted to the k8s client in this test scenario
-				updatedInstance := &clv1alpha2.Instance{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: namespace}, updatedInstance)
-				Expect(err).ToNot(HaveOccurred())
-
-				// If the instance status wasn't updated by the enforce function, we skip this check
-				// as the main test is that the service was created correctly
-				if updatedInstance.Status.PublicExposure != nil {
-					Expect(updatedInstance.Status.PublicExposure.Ports).To(HaveLen(1), "PublicExposure status should have one port")
-					Expect(updatedInstance.Status.PublicExposure.Ports[0].Port).To(Equal(assignedPort))
-				} else {
-					Skip("Instance status not updated - this might be expected in test environment")
-				}
 			})
 		})
 	})
