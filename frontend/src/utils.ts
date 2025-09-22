@@ -288,8 +288,6 @@ export function buildPublicExposurePatch(
 ): string {
   // Handle empty ports array case - this will disable public exposure completely
   if (portsNormalized.length === 0) {
-    console.log('📦 Building patch to disable public exposure (empty ports)');
-    // Try using empty ports array instead of null
     const payload = {
       apiVersion: 'crownlabs.polito.it/v1alpha2',
       kind: 'Instance',
@@ -315,6 +313,5 @@ export function buildPublicExposurePatch(
     kind: 'Instance',
     spec: { publicExposure: { ports: portsFormatted } },
   };
-  console.log(`📦 Building patch with ${portsFormatted.length} ports`);
   return JSON.stringify(payload);
 }

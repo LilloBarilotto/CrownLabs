@@ -412,7 +412,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
               <>
                 <div
                   style={{
-                    maxHeight: '320px', // Circa 4 righe di porte (80px per riga)
+                    maxHeight: '320px', 
                     overflowY: 'auto',
                     paddingRight: '8px',
                     marginBottom: '16px',
