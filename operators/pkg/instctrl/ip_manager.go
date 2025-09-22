@@ -57,7 +57,7 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 // FindBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
 func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
+	log.V(1).Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
 	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureOpts.IPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
@@ -142,6 +142,7 @@ func tryAssignPorts(specified, auto []clv1alpha2.PublicServicePort, portsInUse m
 // reorderIPPoolWithPreferredIP moves the preferred IP (from existing service) to the front of the pool.
 func reorderIPPoolWithPreferredIP(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, pool []string, lbIPsKey string) []string {
 	log := ctrl.LoggerFrom(ctx)
+
 	existingSvc := &v1.Service{
 		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
 	}
@@ -149,13 +150,9 @@ func reorderIPPoolWithPreferredIP(ctx context.Context, c client.Client, instance
 	if err != nil {
 		return pool
 	}
-	var preferredIP string
-	if ip, ok := existingSvc.Annotations[lbIPsKey]; ok && ip != "" {
-		preferredIP = ip
-	} else if len(existingSvc.Status.LoadBalancer.Ingress) > 0 {
-		preferredIP = existingSvc.Status.LoadBalancer.Ingress[0].IP
-	}
-	if preferredIP == "" {
+
+	preferredIP, ok := existingSvc.Annotations[lbIPsKey]
+	if !ok || preferredIP == "" {
 		return pool
 	}
 
@@ -172,7 +169,7 @@ func reorderIPPoolWithPreferredIP(ctx context.Context, c client.Client, instance
 	if found {
 		return newPool
 	}
-	log.Info("Preferred IP from existing service is no longer in the current IPPool, ignoring", "ip", preferredIP, "service", existingSvc.Name)
+	log.V(1).Info("Preferred IP from existing service is no longer in the current IPPool, ignoring", "ip", preferredIP, "service", existingSvc.Name)
 	return pool
 }
 
@@ -196,25 +193,19 @@ func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, e
 
 	for i := range svcList.Items {
 		svc := &svcList.Items[i]
-		// The check for ServiceType is still a good practice, although the label should be enough.
+		// Check for ServiceType is LoadBalancer, although the label should be enough for the purpose.
 		if svc.Spec.Type != v1.ServiceTypeLoadBalancer {
 			continue
 		}
 
-		// Exclude the service we are currently reconciling to avoid self-conflicts.
+		// Exclude the service we are currently reconciling to avoid self-conflicts for IP/port assignment.
 		if svc.Name == excludeSvcName && svc.Namespace == excludeSvcNs {
 			continue
 		}
 
-		var externalIP string
 		// Prefer the annotation as it's the desired state.
-		if ip, ok := svc.Annotations[opts.LoadBalancerIPsKey]; ok && ip != "" {
-			externalIP = ip
-		} else if len(svc.Status.LoadBalancer.Ingress) > 0 {
-			externalIP = svc.Status.LoadBalancer.Ingress[0].IP
-		}
-
-		if externalIP == "" {
+		externalIP, ok := svc.Annotations[opts.LoadBalancerIPsKey]
+		if !ok || externalIP == "" {
 			continue
 		}
 

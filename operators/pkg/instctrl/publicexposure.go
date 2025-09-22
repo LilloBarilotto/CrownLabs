@@ -17,11 +17,9 @@ package instctrl
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	v1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
@@ -67,27 +65,14 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
 	}
 
-	// Try to get the existing service
-	err := r.Get(ctx, client.ObjectKey{Name: service.Name, Namespace: instance.Namespace}, service)
-	serviceExists := err == nil
-
-	// If the service exists, check if its current spec matches the desired spec
-	if serviceExists {
-		log.V(1).Info("Existing LoadBalancer service detected for instance", "service", service.Name, "namespace", service.Namespace)
-
-		desiredPorts := instance.Spec.PublicExposure.Ports
-		currentPorts := []clv1alpha2.PublicServicePort{}
-		for _, p := range service.Spec.Ports {
-			currentPorts = append(currentPorts, clv1alpha2.PublicServicePort{
-				Name:       p.Name,
-				Port:       p.Port,
-				TargetPort: p.TargetPort.IntVal,
-				Protocol:   p.Protocol,
-			})
+	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
+		// Set owner reference
+		if err := controllerutil.SetControllerReference(instance, service, r.Scheme); err != nil {
+			return err
 		}
-		currentIP := service.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]
 
-		// Check if the current IP is still present in the current IPPool
+		// Check if the current IP is still present in the current IPPool (if updating)
+		currentIP := service.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]
 		ipStillValid := false
 		for _, ip := range r.PublicExposureOpts.IPPool {
 			if ip == currentIP {
@@ -95,57 +80,42 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 				break
 			}
 		}
-
-		if !ipStillValid {
-			log.Info("Service IP is no longer valid (not in current IPPool), deleting service to trigger reassignment", "ip", currentIP)
-			err := r.enforcePublicExposureAbsence(ctx)
-			if err != nil {
-				log.Error(err, "Failed to delete invalid public exposure service")
-				return err
+		if currentIP != "" && !ipStillValid {
+			// If the current IP is not valid, clear annotations/spec to force reassignment
+			service.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey] = ""
+			service.Spec.Ports = nil
+		} else if currentIP != "" {
+			// If the current IP is valid, check if the requested ports match the current ones
+			// If they match, do nothing, already in desired state
+			// If they don't match, we need to update the service
+			specPorts := instance.Spec.PublicExposure.Ports
+			statusPorts := instance.Status.PublicExposure.Ports
+			svcPorts := make([]clv1alpha2.PublicServicePort, len(service.Spec.Ports))
+			for i, p := range service.Spec.Ports {
+				svcPorts[i] = clv1alpha2.PublicServicePort{
+					Name:       p.Name,
+					Port:       p.Port,
+					TargetPort: p.TargetPort.IntVal,
+					Protocol:   p.Protocol,
+				}
 			}
-			return nil
+			if !needsServiceUpdate(specPorts, statusPorts, svcPorts) {
+				// If the current IP is valid and the requested ports match the current ones, do nothing, already in desired state
+				log.V(1).Info("LoadBalancer service already in desired state", "service", service.GetName())
+				return nil
+			}
 		}
 
-		// If IP and ports match, and the IP is valid, skip update
-		if reflect.DeepEqual(desiredPorts, currentPorts) && currentIP != "" {
-			log.Info("Service already matches desired state and IP is valid, skipping update")
-			// Also update status if needed
-			newStatus := &clv1alpha2.InstancePublicExposureStatus{
-				ExternalIP: currentIP,
-				Ports:      currentPorts,
-				Phase:      clv1alpha2.PublicExposurePhaseReady,
-			}
-			if !reflect.DeepEqual(instance.Status.PublicExposure, newStatus) {
-				instance.Status.PublicExposure = newStatus
-				instance.Status.PublicExposure.Message = "" // Clear any previous error message
-			}
-			return nil
+		// Retrieve the map of used ports by other LoadBalancer services
+		usedPortsByIP, err := UpdateUsedPortsByIP(ctx, r.Client, service.Name, instance.Namespace, &r.PublicExposureOpts)
+		if err != nil {
+			return fmt.Errorf("failed to get used ports by IP: %w", err)
 		}
-	}
 
-	// 1. Retrieve the map of used ports by other LoadBalancer services
-	usedPortsByIP, err := UpdateUsedPortsByIP(ctx, r.Client, service.Name, instance.Namespace, &r.PublicExposureOpts)
-	if err != nil {
-		log.Error(err, "failed to get used ports by IP")
-		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
-		instance.Status.PublicExposure.Message = "Failed to check free ports, contact the administrator."
-		return err
-	}
-
-	// 2. Find the best IP and ports to assign using the logic from ip_manager.go
-	targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
-	if err != nil {
-		log.Error(err, "failed to assign IP and ports for public exposure")
-		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
-		instance.Status.PublicExposure.Message = "Unable to allocate IP/ports: " + err.Error()
-		return err
-	}
-
-	// 3. Create or update the LoadBalancer Service
-	op, err := controllerutil.CreateOrUpdate(ctx, r.Client, service, func() error {
-		// Set owner reference
-		if err := controllerutil.SetControllerReference(instance, service, r.Scheme); err != nil {
-			return err
+		// Find the best IP and ports to assign using the logic from ip_manager.go
+		targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP)
+		if err != nil {
+			return fmt.Errorf("failed to assign IP and ports for public exposure: %w", err)
 		}
 
 		// Set labels
@@ -170,7 +140,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	}
 	log.V(utils.FromResult(op)).Info("LoadBalancer service enforced", "service", service.GetName(), "result", op)
 
-	// 4. Enforce the network policy before updating the instance status
+	// Enforce the network policy before updating the instance status
 	if err = r.enforcePublicExposureNetworkPolicyPresence(ctx); err != nil {
 		log.Error(err, "failed to enforce public exposure network policy")
 		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
@@ -178,8 +148,19 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		return err
 	}
 
-	// 5. Update the instance status only after all resources are ready
-	instance.Status.PublicExposure.ExternalIP = targetIP
+	// Update the instance status only after all resources are ready
+	currentIP := service.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]
+	assignedPorts := []clv1alpha2.PublicServicePort{}
+	for _, p := range service.Spec.Ports {
+		assignedPorts = append(assignedPorts, clv1alpha2.PublicServicePort{
+			Name:       p.Name,
+			Port:       p.Port,
+			TargetPort: p.TargetPort.IntVal,
+			Protocol:   p.Protocol,
+		})
+	}
+
+	instance.Status.PublicExposure.ExternalIP = currentIP
 	instance.Status.PublicExposure.Ports = assignedPorts
 	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseReady
 	instance.Status.PublicExposure.Message = "Public exposure completed successfully."
@@ -231,4 +212,64 @@ func validatePublicExposureRequest(ports []clv1alpha2.PublicServicePort) error {
 	}
 
 	return nil
+}
+
+// needsServiceUpdate returns true if the requested ports in spec differ from the actual ones (status/Service),
+// considering that Port==0 in spec means "any assigned port". The comparison is robust to port order.
+func needsServiceUpdate(specPorts, statusPorts, svcPorts []clv1alpha2.PublicServicePort) bool {
+	type portKey struct {
+		Name     string
+		Target   int32
+		Protocol v1.Protocol
+	}
+
+	// Build set of keys from spec
+	specKeys := make(map[portKey]struct{}, len(specPorts))
+	for _, p := range specPorts {
+		specKeys[portKey{p.Name, p.TargetPort, p.Protocol}] = struct{}{}
+	}
+
+	// Helper: check that all ports in a slice are present in specKeys, and viceversa
+	matchKeys := func(ports []clv1alpha2.PublicServicePort) bool {
+		if len(ports) != len(specKeys) {
+			return false
+		}
+		seen := make(map[portKey]struct{}, len(ports))
+		for _, p := range ports {
+			k := portKey{p.Name, p.TargetPort, p.Protocol}
+			if _, ok := specKeys[k]; !ok {
+				return false
+			}
+			seen[k] = struct{}{}
+		}
+		// Check that all specKeys are present
+		for k := range specKeys {
+			if _, ok := seen[k]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+
+	if !matchKeys(statusPorts) || !matchKeys(svcPorts) {
+		return true
+	}
+
+	// For each port in spec with Port != 0, Port must match in both status and svc
+	portMatch := func(ports []clv1alpha2.PublicServicePort, ref clv1alpha2.PublicServicePort) bool {
+		for _, p := range ports {
+			if p.Name == ref.Name && p.TargetPort == ref.TargetPort && p.Protocol == ref.Protocol && p.Port == ref.Port {
+				return true
+			}
+		}
+		return false
+	}
+	for _, p := range specPorts {
+		if p.Port != 0 {
+			if !portMatch(statusPorts, p) || !portMatch(svcPorts, p) {
+				return true
+			}
+		}
+	}
+	return false
 }
