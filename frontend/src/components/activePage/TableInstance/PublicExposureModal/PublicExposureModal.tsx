@@ -518,7 +518,9 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                           </Form.Item>
                         </Col>
                       </Row>
-                      {index < fields.length - 1 && <Divider />}
+                      {index < fields.length - 1 && (
+                        <Divider style={{ margin: '8px 0' }} />
+                      )}
                     </div>
                   ))}
                 </div>

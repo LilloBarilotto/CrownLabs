@@ -16,9 +16,8 @@ import type {
   OwnedInstancesQuery,
   UpdatedOwnedInstancesSubscriptionResult,
   WorkspacesListItem,
-  Phase5,
 } from './generated-types';
-import { AutoEnroll, Phase, Phase2, UpdateType } from './generated-types';
+import { AutoEnroll, Phase, Phase2, Phase5, UpdateType } from './generated-types';
 import { getInstancePatchJson } from './graphql-components/utils';
 import type {
   Instance,
@@ -89,6 +88,19 @@ export const getInstanceLabels = (
   i: DeepPartial<ItPolitoCrownlabsV1alpha2Instance>,
 ): InstanceLabels | undefined => i.metadata?.labels as InstanceLabels;
 
+// Helper functions for type conversions
+const safePhaseConversion = (phase: any): Phase => {
+  return (phase as Phase) || Phase.Off;
+};
+
+const safePhase5Conversion = (phase: any): Phase5 => {
+  return (phase as Phase5) || Phase5.Pending;
+};
+
+const safeWorkspaceRoleConversion = (role: any): WorkspaceRole => {
+  return (role as WorkspaceRole) || WorkspaceRole.user;
+};
+
 // Helper functions for public exposure logic
 const hasActivePublicExposure = (
   publicExposure: any,
@@ -101,7 +113,7 @@ const hasActivePublicExposure = (
     (publicExposureStatus &&
       publicExposureStatus.ports &&
       publicExposureStatus.ports.length > 0 &&
-      (publicExposureStatus.phase as unknown as Phase) !== Phase.Off)
+      safePhaseConversion(publicExposureStatus.phase) !== Phase.Off)
   );
 };
 
@@ -131,7 +143,7 @@ const buildPublicExposureObject = (
   
   return {
     externalIP: publicExposureStatus?.externalIP || '',
-    phase: (publicExposureStatus?.phase as unknown as Phase) || Phase.Off,
+    phase: safePhaseConversion(publicExposureStatus?.phase),
     ports: portsToUse
       ?.filter((p: any) => p != null)
       .map(mapPortToPortListItem) || [],
@@ -189,7 +201,7 @@ export const makeGuiInstance = (
     ),
     environmentType: environmentType,
     ip: status?.ip,
-    status: status?.phase as unknown as Phase,
+    status: safePhaseConversion(status?.phase),
     url: status?.url,
     timeStamp: metadata?.creationTimestamp,
     tenantId: userId,
@@ -221,7 +233,7 @@ export const makeWorkspace = (
     name: name,
     namespace: status?.namespace?.name,
     prettyName: spec?.prettyName,
-    role: role! as unknown as WorkspaceRole,
+    role: safeWorkspaceRoleConversion(role),
     templates: [],
   } as Workspace;
 };
@@ -465,7 +477,7 @@ export const getManagerInstances = (
     templatePrettyName: templatePrettyname,
     environmentType: environmentType,
     ip: status?.ip,
-    status: status?.phase as unknown as Phase,
+    status: safePhaseConversion(status?.phase),
     url: status?.url,
     timeStamp: metadata?.creationTimestamp,
     tenantId: tenantName,
@@ -772,7 +784,7 @@ export const makeGuiSharedVolume = (
     name: metadata?.name,
     prettyName: spec?.prettyName,
     size: spec?.size,
-    status: status?.phase as unknown as Phase5,
+    status: safePhase5Conversion(status?.phase),
     timeStamp: metadata?.creationTimestamp,
     namespace: metadata?.namespace,
   } as SharedVolume;
