@@ -20,7 +20,6 @@ import (
 	"sort"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -55,14 +54,14 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 }
 
 // FindBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
-func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
+func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool, currentIP string) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
 	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureOpts.IPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
-	// Check if a service already exists for this instance and try to reuse its IP.
-	prioritizedIPPool = reorderIPPoolWithPreferredIP(ctx, c, instance, prioritizedIPPool, r.PublicExposureOpts.LoadBalancerIPsKey)
+	// Move the preferred IP (if any) to the front of the pool.
+	prioritizedIPPool = reorderIPPoolWithPreferredIP(prioritizedIPPool, currentIP)
 
 	specifiedPorts, autoPorts := splitPorts(instance.Spec.PublicExposure.Ports)
 
@@ -140,22 +139,10 @@ func tryAssignPorts(specified, auto []clv1alpha2.PublicServicePort, portsInUse m
 }
 
 // reorderIPPoolWithPreferredIP moves the preferred IP (from existing service) to the front of the pool.
-func reorderIPPoolWithPreferredIP(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, pool []string, lbIPsKey string) []string {
-	log := ctrl.LoggerFrom(ctx)
-
-	existingSvc := &v1.Service{
-		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
-	}
-	err := c.Get(ctx, types.NamespacedName{Name: existingSvc.Name, Namespace: instance.Namespace}, existingSvc)
-	if err != nil {
+func reorderIPPoolWithPreferredIP(pool []string, preferredIP string) []string {
+	if preferredIP == "" {
 		return pool
 	}
-
-	preferredIP, ok := existingSvc.Annotations[lbIPsKey]
-	if !ok || preferredIP == "" {
-		return pool
-	}
-
 	var found bool
 	var newPool []string
 	for i, ip := range pool {
@@ -169,7 +156,6 @@ func reorderIPPoolWithPreferredIP(ctx context.Context, c client.Client, instance
 	if found {
 		return newPool
 	}
-	log.V(1).Info("Preferred IP from existing service is no longer in the current IPPool, ignoring", "ip", preferredIP, "service", existingSvc.Name)
 	return pool
 }
 

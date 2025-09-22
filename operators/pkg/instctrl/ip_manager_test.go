@@ -123,7 +123,7 @@ var _ = Describe("IP Manager Functions", func() {
 				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{}
-				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
+				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP, "")
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ip).To(Equal("172.18.0.240"))
@@ -143,7 +143,7 @@ var _ = Describe("IP Manager Functions", func() {
 					"172.18.0.241": {9090: true},
 				}
 
-				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
+				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP, instance.Annotations["metallb.universe.tf/loadBalancerIPs"])
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ip).To(Equal("172.18.0.241"))
@@ -160,7 +160,7 @@ var _ = Describe("IP Manager Functions", func() {
 				instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
 
 				usedPortsByIP := map[string]map[int32]bool{}
-				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
+				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP, instance.Annotations["metallb.universe.tf/loadBalancerIPs"])
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ip).To(Equal("172.18.0.240"))
@@ -177,7 +177,7 @@ var _ = Describe("IP Manager Functions", func() {
 					"172.18.0.240": {int32(forge.BasePortForAutomaticAssignment): true},
 				}
 
-				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
+				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP, instance.Annotations["metallb.universe.tf/loadBalancerIPs"])
 
 				Expect(err).ToNot(HaveOccurred())
 				Expect(ip).To(Equal("172.18.0.240"))
@@ -199,7 +199,7 @@ var _ = Describe("IP Manager Functions", func() {
 					"172.18.0.243": {8080: true},
 				}
 
-				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP)
+				ip, assignedPorts, err := reconciler.FindBestIPAndAssignPorts(ctx, k8sClient, instance, usedPortsByIP, instance.Annotations["metallb.universe.tf/loadBalancerIPs"])
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no available IP can support all requested ports"))
