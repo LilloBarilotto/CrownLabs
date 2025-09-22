@@ -35,6 +35,7 @@ query ownedInstances($tenantNamespace: String!) {
             name
             port
             targetPort
+            protocol
           }
         }
         templateCrownlabsPolitoItTemplateRef {
