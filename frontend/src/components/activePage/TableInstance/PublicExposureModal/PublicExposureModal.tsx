@@ -524,7 +524,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                   />
                 )}
 
-                <Form.Item style={{ textAlign: 'center' }}>
+                <Form.Item style={{ textAlign: 'center', marginTop: '24px' }}>
                   <Button
                     type="dashed"
                     onClick={() =>
