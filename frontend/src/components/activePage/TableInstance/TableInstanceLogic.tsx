@@ -53,7 +53,6 @@ const TableInstanceLogic: FC<ITableInstanceLogicProps> = ({ ...props }) => {
     skip: !tenantId,
     variables: { tenantNamespace },
     onCompleted: data => {
-      console.log('📊 Instances query completed with data:', data);
       setDataInstances(data);
     },
     fetchPolicy: 'network-only',

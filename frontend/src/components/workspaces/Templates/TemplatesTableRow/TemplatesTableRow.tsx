@@ -176,29 +176,15 @@ const TemplatesTableRow: FC<ITemplatesTableRowProps> = ({ ...props }) => {
                 <CodeOutlined style={{ fontSize: '24px', color: '#1c7afd' }} />
               )}
               <label className="ml-3 cursor-pointer">
-                {template.name}
-                {template.instances &&
-                  template.instances.some(i => i.allowPublicExposure) && (
-                    <Tooltip title="Port Exposure Available">
-                      <span
-                        style={{
-                          borderRadius: '6px',
-                          padding: '2px 6px',
-                          marginLeft: '6px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <ExportOutlined
-                          style={{
-                            color: '#7d34ddff',
-                            fontSize: '16px',
-                            fontWeight: 'bold',
-                          }}
-                        />
-                      </span>
-                    </Tooltip>
-                  )}
+                <Space>
+                  {template.name}
+                  {template.instances &&
+                    template.instances.some(i => i.allowPublicExposure) && (
+                      <Tooltip title="Port Exposure Available">
+                        <ExportOutlined className="text-purple-600" />
+                      </Tooltip>
+                    )}
+                </Space>
               </label>
               {template.persistent && (
                 <Tooltip
