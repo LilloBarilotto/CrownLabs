@@ -1,5 +1,5 @@
 import { type FC, type SetStateAction, useContext, useState } from 'react';
-import { Dropdown } from 'antd';
+import { Dropdown, Badge, Space } from 'antd';
 import { Button } from 'antd';
 import {
   ExportOutlined,
@@ -154,31 +154,18 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
                 {
                   key: 'expose',
                   label: (
-                    <span
-                      style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                    >
+                    <Space align="center">
                       Port Exposure
                       {instance.publicExposure &&
                         Array.isArray(instance.publicExposure.ports) &&
                         instance.publicExposure.ports.length > 0 && (
-                          <span
-                            style={{
-                              background: '#1677ff',
-                              color: 'white',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              padding: '0 6px',
-                              marginLeft: '4px',
-                              minWidth: '18px',
-                              textAlign: 'center',
-                              lineHeight: '18px',
-                              display: 'inline-block',
-                            }}
-                          >
-                            {instance.publicExposure.ports.length}
-                          </span>
+                          <Badge
+                            count={instance.publicExposure.ports.length}
+                            showZero={false}
+                            size="small"
+                          />
                         )}
-                    </span>
+                    </Space>
                   ),
                   icon: <ExportOutlined style={font20px} />,
                   onClick: () => onEnablePublicExposure?.(),
