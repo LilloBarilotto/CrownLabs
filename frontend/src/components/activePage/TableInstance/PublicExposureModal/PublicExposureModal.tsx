@@ -12,8 +12,9 @@ import {
   Select,
   Divider,
   Typography,
+  Tooltip,
 } from 'antd';
-import { DeleteOutlined, LoadingOutlined } from '@ant-design/icons';
+import { DeleteOutlined, LoadingOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import type { RuleObject } from 'antd/lib/form';
 import { useApplyInstanceMutation } from '../../../../generated-types';
 import {
@@ -374,7 +375,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
     <Modal
       open={open}
       onCancel={onCancel}
-      width={650}
+      width={680}
       title={
         <>
           Public Port Exposure for <em>{instanceName}</em>
@@ -443,7 +444,18 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                           <Form.Item
                             {...restField}
                             name={[name, 'targetPort']}
-                            label={index === 0 ? 'Internal Port' : ''}
+                            label={
+                              index === 0 ? (
+                                <span>
+                                  Internal Port{' '}
+                                  <Tooltip title="The port number inside your container where your service is listening (e.g., 8080 for a web server)">
+                                    <InfoCircleOutlined style={{ color: '#1890ff', fontSize: '10px', marginLeft: '2px' }} />
+                                  </Tooltip>
+                                </span>
+                              ) : (
+                                ''
+                              )
+                            }
                             rules={[
                               { required: true, message: 'Required' },
                               {
@@ -465,7 +477,18 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                           <Form.Item
                             {...restField}
                             name={[name, 'protocol']}
-                            label={index === 0 ? 'Protocol' : ''}
+                            label={
+                              index === 0 ? (
+                                <span>
+                                  Protocol{' '}
+                                  <Tooltip title="The network protocol used for communication. TCP is most common for web services, UDP for real-time applications">
+                                    <InfoCircleOutlined style={{ color: '#1890ff', fontSize: '10px', marginLeft: '2px' }} />
+                                  </Tooltip>
+                                </span>
+                              ) : (
+                                ''
+                              )
+                            }
                             rules={[{ required: true, message: 'Required' }]}
                             initialValue="TCP"
                           >
@@ -484,7 +507,18 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                             <Form.Item
                               {...restField}
                               name={[name, 'desiredPort']}
-                              label={index === 0 ? 'Requested Port' : ''}
+                              label={
+                                index === 0 ? (
+                                  <span>
+                                    Requested Port{' '}
+                                    <Tooltip title="Specific external port you want to use. Leave empty for automatic assignment by the system">
+                                      <InfoCircleOutlined style={{ color: '#1890ff', fontSize: '10px', marginLeft: '2px' }} />
+                                    </Tooltip>
+                                  </span>
+                                ) : (
+                                  ''
+                                )
+                              }
                               rules={[{ validator: portValidator }]}
                               validateTrigger={['onChange', 'onBlur']}
                               hasFeedback={false}
@@ -499,7 +533,18 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                             <Form.Item
                               {...restField}
                               name={[name, '_displayActualPort']}
-                              label={index === 0 ? 'Assigned Port' : ''}
+                              label={
+                                index === 0 ? (
+                                  <span>
+                                    Assigned Port{' '}
+                                    <Tooltip title="The actual external port assigned by the system. This is the port you'll use to access your service from outside">
+                                      <InfoCircleOutlined style={{ color: '#1890ff', fontSize: '10px', marginLeft: '2px' }} />
+                                    </Tooltip>
+                                  </span>
+                                ) : (
+                                  ''
+                                )
+                              }
                             >
                               <Input placeholder="—" disabled={true} />
                             </Form.Item>
