@@ -375,7 +375,11 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
       open={open}
       onCancel={onCancel}
       width={650}
-      title={`Public Port Exposure for - ${instanceName}`}
+      title={
+        <>
+          Public Port Exposure for <em>{instanceName}</em>
+        </>
+      }
       footer={[
         <Button
           key="cancel"
@@ -414,7 +418,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                   {fields.map(({ key, name, ...restField }, index) => (
                     <div key={key}>
                       <Row gutter={8} align="bottom">
-                        <Col span={allowPublicExposure ? 3 : 5}>
+                        <Col span={allowPublicExposure ? 4 : 5}>
                           <Form.Item
                             {...restField}
                             name={[name, 'name']}
@@ -472,7 +476,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                             <Form.Item
                               {...restField}
                               name={[name, 'desiredPort']}
-                              label={index === 0 ? 'Request Port' : ''}
+                              label={index === 0 ? 'Requested Port' : ''}
                               rules={[{ validator: portValidator }]}
                               validateTrigger={['onChange', 'onBlur']}
                               hasFeedback={false}
@@ -493,7 +497,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                             </Form.Item>
                           </Col>
                         )}
-                        <Col span={2}>
+                        <Col span={1}>
                           <Form.Item label={index === 0 ? '\u00A0' : ''}>
                             <Button
                               type="text"
