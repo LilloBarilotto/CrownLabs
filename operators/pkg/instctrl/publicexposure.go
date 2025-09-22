@@ -87,9 +87,28 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		}
 		currentIP := service.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]
 
-		// If the current IP and ports match the desired, skip update
+		// Check if the current IP is still present in the current IPPool
+		ipStillValid := false
+		for _, ip := range r.PublicExposureOpts.IPPool {
+			if ip == currentIP {
+				ipStillValid = true
+				break
+			}
+		}
+
+		if !ipStillValid {
+			log.Info("Service IP is no longer valid (not in current IPPool), deleting service to trigger reassignment", "ip", currentIP)
+			err := r.enforcePublicExposureAbsence(ctx)
+			if err != nil {
+				log.Error(err, "Failed to delete invalid public exposure service")
+				return err
+			}
+			return nil
+		}
+
+		// If IP and ports match, and the IP is valid, skip update
 		if reflect.DeepEqual(desiredPorts, currentPorts) && currentIP != "" {
-			log.Info("Service already matches desired state, skipping update")
+			log.Info("Service already matches desired state and IP is valid, skipping update")
 			// Also update status if needed
 			newStatus := &clv1alpha2.InstancePublicExposureStatus{
 				ExternalIP: currentIP,
@@ -151,19 +170,19 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	}
 	log.V(utils.FromResult(op)).Info("LoadBalancer service enforced", "service", service.GetName(), "result", op)
 
-	// 4. Update the instance status
-	instance.Status.PublicExposure.ExternalIP = targetIP
-	instance.Status.PublicExposure.Ports = assignedPorts
-	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseReady
-	instance.Status.PublicExposure.Message = "Public exposure completed successfully."
-
-	// Enforce the network policy only after the service is ready.
+	// 4. Enforce the network policy before updating the instance status
 	if err = r.enforcePublicExposureNetworkPolicyPresence(ctx); err != nil {
 		log.Error(err, "failed to enforce public exposure network policy")
 		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
 		instance.Status.PublicExposure.Message = "Failed to enforce the network policy, contact the administrator."
 		return err
 	}
+
+	// 5. Update the instance status only after all resources are ready
+	instance.Status.PublicExposure.ExternalIP = targetIP
+	instance.Status.PublicExposure.Ports = assignedPorts
+	instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseReady
+	instance.Status.PublicExposure.Message = "Public exposure completed successfully."
 
 	return nil
 }
