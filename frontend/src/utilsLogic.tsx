@@ -89,6 +89,55 @@ export const getInstanceLabels = (
   i: DeepPartial<ItPolitoCrownlabsV1alpha2Instance>,
 ): InstanceLabels | undefined => i.metadata?.labels as InstanceLabels;
 
+// Helper functions for public exposure logic
+const hasActivePublicExposure = (
+  publicExposure: any,
+  publicExposureStatus: any
+) => {
+  return (
+    (publicExposure &&
+      publicExposure.ports &&
+      publicExposure.ports.length > 0) ||
+    (publicExposureStatus &&
+      publicExposureStatus.ports &&
+      publicExposureStatus.ports.length > 0 &&
+      (publicExposureStatus.phase as unknown as Phase) !== Phase.Off)
+  );
+};
+
+const getPortsToUse = (publicExposureStatus: any, publicExposure: any) => {
+  return publicExposureStatus?.ports && publicExposureStatus.ports.length > 0
+    ? publicExposureStatus.ports
+    : (publicExposure?.ports ?? []);
+};
+
+const mapPortToPortListItem = (p: any) => ({
+  name: p.name || '',
+  port: p.port && p.port > 0 ? String(p.port) : '',
+  targetPort: p.targetPort || 0,
+  protocol:
+    (p as { protocol?: 'TCP' | 'UDP' | 'SCTP' })?.protocol || 'TCP',
+});
+
+const buildPublicExposureObject = (
+  publicExposure: any,
+  publicExposureStatus: any
+) => {
+  if (!hasActivePublicExposure(publicExposure, publicExposureStatus)) {
+    return undefined;
+  }
+
+  const portsToUse = getPortsToUse(publicExposureStatus, publicExposure);
+  
+  return {
+    externalIP: publicExposureStatus?.externalIP || '',
+    phase: (publicExposureStatus?.phase as unknown as Phase) || Phase.Off,
+    ports: portsToUse
+      ?.filter((p: any) => p != null)
+      .map(mapPortToPortListItem) || [],
+  };
+};
+
 export const makeGuiInstance = (
   instance?: Nullable<DeepPartial<ItPolitoCrownlabsV1alpha2Instance>>,
   userId?: string,
@@ -153,35 +202,7 @@ export const makeGuiInstance = (
     allowPublicExposure,
     tenantDisplayName: '',
     myDriveUrl: '',
-    publicExposure:
-      (publicExposure &&
-        publicExposure.ports &&
-        publicExposure.ports.length > 0) ||
-      (publicExposureStatus &&
-        publicExposureStatus.ports &&
-        publicExposureStatus.ports.length > 0 &&
-        (publicExposureStatus.phase as unknown as Phase) !== Phase.Off)
-        ? {
-            externalIP: publicExposureStatus?.externalIP || '',
-            phase:
-              (publicExposureStatus?.phase as unknown as Phase) || Phase.Off,
-            ports:
-              (publicExposureStatus?.ports &&
-              publicExposureStatus.ports.length > 0
-                ? publicExposureStatus.ports
-                : (publicExposure?.ports ?? [])
-              )
-                ?.filter(p => p != null)
-                .map(p => ({
-                  name: p.name || '',
-                  port: p.port && p.port > 0 ? String(p.port) : '',
-                  targetPort: p.targetPort || 0,
-                  protocol:
-                    (p as { protocol?: 'TCP' | 'UDP' | 'SCTP' })?.protocol ||
-                    'TCP',
-                })) || [],
-          }
-        : undefined, // Questo sarà undefined quando non ci sono porte esposte O quando la fase è Off
+    publicExposure: buildPublicExposureObject(publicExposure, publicExposureStatus),
   } as Instance;
 };
 
@@ -454,35 +475,7 @@ export const getManagerInstances = (
     running: spec?.running,
     allowPublicExposure,
     myDriveUrl: '',
-    publicExposure:
-      (publicExposure &&
-        publicExposure.ports &&
-        publicExposure.ports.length > 0) ||
-      (publicExposureStatus &&
-        publicExposureStatus.ports &&
-        publicExposureStatus.ports.length > 0 &&
-        (publicExposureStatus.phase as unknown as Phase) !== Phase.Off)
-        ? {
-            externalIP: publicExposureStatus?.externalIP || '',
-            phase:
-              (publicExposureStatus?.phase as unknown as Phase) || Phase.Off,
-            ports:
-              (publicExposureStatus?.ports &&
-              publicExposureStatus.ports.length > 0
-                ? publicExposureStatus.ports
-                : (publicExposure?.ports ?? [])
-              )
-                ?.filter(p => p != null)
-                .map(p => ({
-                  name: p.name || '',
-                  port: p.port && p.port > 0 ? String(p.port) : '',
-                  targetPort: p.targetPort || 0,
-                  protocol:
-                    (p as { protocol?: 'TCP' | 'UDP' | 'SCTP' })?.protocol ||
-                    'TCP',
-                })) || [],
-          }
-        : undefined,
+    publicExposure: buildPublicExposureObject(publicExposure, publicExposureStatus),
   } as Instance;
 };
 

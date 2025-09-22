@@ -414,7 +414,15 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
           <Form.List name="ports">
             {(fields, { add, remove }) => (
               <>
-                <div className="ant-modal-body" style={{ maxHeight: 320, overflowY: 'auto', paddingRight: 8, marginBottom: 16 }}>
+                <div
+                  className="ant-modal-body"
+                  style={{
+                    maxHeight: 320,
+                    overflowY: 'auto',
+                    paddingRight: 8,
+                    marginBottom: 16,
+                  }}
+                >
                   {fields.map(({ key, name, ...restField }, index) => (
                     <div key={key}>
                       <Row gutter={8} align="bottom">
@@ -543,11 +551,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                 </Form.Item>
 
                 {error && (
-                  <Alert
-                    type="error"
-                    message={error.message}
-                    showIcon
-                  />
+                  <Alert type="error" message={error.message} showIcon />
                 )}
 
                 {!hasValidPorts && ports && ports.length > 0 && (
