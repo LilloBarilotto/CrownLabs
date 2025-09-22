@@ -1,7 +1,6 @@
 import type { CodegenConfig } from '@graphql-codegen/cli';
 
 const schemaUrl =
-  // @ts-ignore - process is available in Node.js environment
   (process.env.GRAPHQL_URL || 'https://graphql.preprod.crownlabs.polito.it') +
   '/schema';
 
