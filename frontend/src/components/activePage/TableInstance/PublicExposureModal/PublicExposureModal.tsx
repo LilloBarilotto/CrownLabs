@@ -11,6 +11,7 @@ import {
   Input,
   Select,
   Divider,
+  Typography,
 } from 'antd';
 import { DeleteOutlined, LoadingOutlined } from '@ant-design/icons';
 import type { RuleObject } from 'antd/lib/form';
@@ -20,6 +21,7 @@ import {
   type PublicExposure,
 } from '../../../../utils';
 import { Phase } from '../../../../generated-types';
+const { Text } = Typography;
 
 interface IPublicExposureModalProps {
   open: boolean;
@@ -410,18 +412,11 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
           <Form.List name="ports">
             {(fields, { add, remove }) => (
               <>
-                <div
-                  style={{
-                    maxHeight: '320px', 
-                    overflowY: 'auto',
-                    paddingRight: '8px',
-                    marginBottom: '16px',
-                  }}
-                >
+                <div className="ant-modal-body" style={{ maxHeight: 320, overflowY: 'auto', paddingRight: 8, marginBottom: 16 }}>
                   {fields.map(({ key, name, ...restField }, index) => (
                     <div key={key}>
                       <Row gutter={8} align="bottom">
-                        <Col span={allowPublicExposure ? 4 : 4}>
+                        <Col span={allowPublicExposure ? 3 : 5}>
                           <Form.Item
                             {...restField}
                             name={[name, 'name']}
@@ -434,7 +429,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                             />
                           </Form.Item>
                         </Col>
-                        <Col span={allowPublicExposure ? 5 : 5}>
+                        <Col span={allowPublicExposure ? 5 : 6}>
                           <Form.Item
                             {...restField}
                             name={[name, 'targetPort']}
@@ -456,7 +451,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                             />
                           </Form.Item>
                         </Col>
-                        <Col span={allowPublicExposure ? 4 : 4}>
+                        <Col span={allowPublicExposure ? 4 : 6}>
                           <Form.Item
                             {...restField}
                             name={[name, 'protocol']}
@@ -475,7 +470,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                           </Form.Item>
                         </Col>
                         {allowPublicExposure && (
-                          <Col span={4}>
+                          <Col span={5}>
                             <Form.Item
                               {...restField}
                               name={[name, 'desiredPort']}
@@ -500,7 +495,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                             </Form.Item>
                           </Col>
                         )}
-                        <Col span={2} style={{ textAlign: 'center' }}>
+                        <Col span={2}>
                           <Form.Item label={index === 0 ? '\u00A0' : ''}>
                             <Button
                               type="text"
@@ -508,13 +503,12 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                               icon={<DeleteOutlined />}
                               onClick={() => remove(name)}
                               disabled={isUpdating}
+                              block
                             />
                           </Form.Item>
                         </Col>
                       </Row>
-                      {index < fields.length - 1 && (
-                        <Divider style={{ margin: '12px 0' }} />
-                      )}
+                      {index < fields.length - 1 && <Divider />}
                     </div>
                   ))}
                 </div>
@@ -525,11 +519,10 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                     message="No ports configured"
                     description="Add a port to expose your instance services to the external network. Specify the internal port of your service and optionally a request port. Note: Saving without any valid ports will remove the external IP address if one is currently assigned."
                     showIcon
-                    style={{ marginBottom: 16, textAlign: 'left' }}
                   />
                 )}
 
-                <Form.Item style={{ textAlign: 'center', marginTop: 24 }}>
+                <Form.Item style={{ textAlign: 'center' }}>
                   <Button
                     type="dashed"
                     onClick={() =>
@@ -552,7 +545,6 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                     type="error"
                     message={error.message}
                     showIcon
-                    style={{ marginTop: 16 }}
                   />
                 )}
 
@@ -561,7 +553,6 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                     type="warning"
                     message="At least one port with a valid Internal value is required to enable public exposure, or remove all ports to disable it."
                     showIcon
-                    style={{ marginTop: 16 }}
                   />
                 )}
 
@@ -570,35 +561,26 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                     type="error"
                     message={`Cannot expose the same internal port multiple times. Duplicate internal ports: ${[...new Set(duplicateTargetPorts)].join(', ')}`}
                     showIcon
-                    style={{ marginTop: 16 }}
                   />
                 )}
 
-                <div
-                  style={{
-                    marginTop: 16,
-                    textAlign: 'left',
-                    fontSize: '12px',
-                    color: '#666',
-                    lineHeight: '1.4',
-                  }}
-                >
+                <Text type="secondary" style={{ fontSize: 12 }}>
                   {existingExposure?.externalIP &&
                   existingExposure.phase !== Phase.Off ? (
-                    <div
+                    <span
                       style={{
                         textDecoration: !hasValidPorts
                           ? 'line-through'
                           : 'none',
-                        color: !hasValidPorts ? '#ff4d4f' : '#666',
+                        color: !hasValidPorts ? '#ff4d4f' : undefined,
                       }}
                     >
                       External IP: {existingExposure.externalIP}
-                    </div>
+                    </span>
                   ) : (
-                    <div>No external IP assigned yet</div>
+                    <span>No external IP assigned yet</span>
                   )}
-                </div>
+                </Text>
               </>
             )}
           </Form.List>
