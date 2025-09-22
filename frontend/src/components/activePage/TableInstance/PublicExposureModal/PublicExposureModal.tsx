@@ -194,12 +194,10 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
     const currentPorts = ports || [];
     const initialPorts = getInitialPorts;
 
-    // Compare array lengths
     if (currentPorts.length !== initialPorts.length) {
       return true;
     }
 
-    // Compare each port's properties
     return currentPorts.some((currentPort, index) => {
       const initialPort = initialPorts[index];
       if (!initialPort) return true;

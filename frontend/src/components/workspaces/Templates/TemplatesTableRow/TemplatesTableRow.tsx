@@ -178,12 +178,11 @@ const TemplatesTableRow: FC<ITemplatesTableRowProps> = ({ ...props }) => {
               <label className="ml-3 cursor-pointer">
                 <Space>
                   {template.name}
-                  {template.instances &&
-                    template.instances.some(i => i.allowPublicExposure) && (
-                      <Tooltip title="Port Exposure Available">
-                        <ExportOutlined className="text-purple-600" />
-                      </Tooltip>
-                    )}
+                  {template.allowPublicExposure && (
+                    <Tooltip title="Port Exposure Available">
+                      <ExportOutlined className="text-fuchsia-400" />
+                    </Tooltip>
+                  )}
                 </Space>
               </label>
               {template.persistent && (
