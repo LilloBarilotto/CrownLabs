@@ -57,120 +57,123 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 // FindBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
 func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
-
 	log.Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
 	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureOpts.IPPool, usedPortsByIP)
 	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
 	// Check if a service already exists for this instance and try to reuse its IP.
-	existingSvc := &v1.Service{
-		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
-	}
+	prioritizedIPPool = reorderIPPoolWithPreferredIP(ctx, c, instance, prioritizedIPPool, r.PublicExposureOpts.LoadBalancerIPsKey)
 
-	err := c.Get(ctx, types.NamespacedName{Name: existingSvc.Name, Namespace: instance.Namespace}, existingSvc)
-	if err == nil {
-		var preferredIP string
-		if ip, ok := existingSvc.Annotations[r.PublicExposureOpts.LoadBalancerIPsKey]; ok && ip != "" {
-			preferredIP = ip
-		} else if len(existingSvc.Status.LoadBalancer.Ingress) > 0 {
-			preferredIP = existingSvc.Status.LoadBalancer.Ingress[0].IP
-		}
+	specifiedPorts, autoPorts := splitPorts(instance.Spec.PublicExposure.Ports)
 
-		if preferredIP != "" {
-			log.Info("Found preferred IP from existing service", "ip", preferredIP, "service", existingSvc.Name)
-			// Move the preferred IP to the front of the pool to try it first.
-			found := false
-			for i, ip := range prioritizedIPPool {
-				if ip == preferredIP {
-					prioritizedIPPool[0], prioritizedIPPool[i] = prioritizedIPPool[i], prioritizedIPPool[0]
-					found = true
-					break
-				}
-			}
-			if !found {
-				// if the preferred IP is not in the pool, add it at the beginning
-				prioritizedIPPool = append([]string{preferredIP}, prioritizedIPPool...)
-			}
-		}
-	}
-
-	var specifiedPorts, autoPorts []clv1alpha2.PublicServicePort
-	for _, svcPort := range instance.Spec.PublicExposure.Ports {
-		if svcPort.Port != 0 {
-			specifiedPorts = append(specifiedPorts, svcPort)
-		} else {
-			autoPorts = append(autoPorts, svcPort)
-		}
-	}
-
-	// Iterate over each available IP in the prioritized pool.
 	for _, ip := range prioritizedIPPool {
 		log.V(1).Info("Checking IP for port availability", "ip", ip)
-
-		// Create a simulated copy of the ports in use for this IP to avoid modifying the original map.
-		simulatedPortsInUse := make(map[int32]bool)
-		if used, ok := usedPortsByIP[ip]; ok {
-			for p := range used {
-				simulatedPortsInUse[p] = true
-			}
+		portsInUse := usedPortsByIP[ip]
+		if portsInUse == nil {
+			portsInUse = make(map[int32]bool)
 		}
 
-		var tempAssignedPorts []clv1alpha2.PublicServicePort
-		isIPCompatible := true
-
-		// 1. Check if all specified ports can be assigned on this IP.
-		for _, port := range specifiedPorts {
-			if simulatedPortsInUse[port.Port] {
-				isIPCompatible = false
-				break
-			}
-			simulatedPortsInUse[port.Port] = true // Simulate port assignment.
-			tempAssignedPorts = append(tempAssignedPorts, clv1alpha2.PublicServicePort{
-				Name:       port.Name,
-				Port:       port.Port,
-				TargetPort: port.TargetPort,
-				Protocol:   port.Protocol,
-			})
+		assignedPorts, ok := tryAssignPorts(specifiedPorts, autoPorts, portsInUse)
+		if ok {
+			log.Info("Found compatible IP and assigned all ports", "ip", ip, "ports", assignedPorts)
+			return ip, assignedPorts, nil
 		}
-
-		if !isIPCompatible {
-			log.V(1).Info("IP not compatible with specified ports", "ip", ip)
-			continue // Try the next IP in the pool.
-		}
-
-		// 2. Assign ports for automatic requests.
-		allAutoPortsAssignable := true
-		for _, port := range autoPorts {
-			assignedPort := int32(0)
-			for p := int32(forge.BasePortForAutomaticAssignment); p <= 65535; p++ {
-				if !simulatedPortsInUse[p] {
-					assignedPort = p
-					simulatedPortsInUse[p] = true // Simulate port assignment.
-					break
-				}
-			}
-
-			if assignedPort == 0 {
-				allAutoPortsAssignable = false
-				break
-			}
-			tempAssignedPorts = append(tempAssignedPorts, clv1alpha2.PublicServicePort{
-				Name:       port.Name,
-				Port:       assignedPort,
-				TargetPort: port.TargetPort,
-				Protocol:   port.Protocol,
-			})
-		}
-
-		// 3. If all ports are assignable, this is the best IP.
-		if allAutoPortsAssignable {
-			log.Info("Found compatible IP and assigned all ports", "ip", ip, "ports", tempAssignedPorts)
-			return ip, tempAssignedPorts, nil
-		}
+		log.V(1).Info("IP not compatible with requested ports", "ip", ip)
 	}
 
 	log.Error(fmt.Errorf("no available IP can support all requested ports"), "IP/port assignment failed for instance", "instance", instance.Name)
 	return "", nil, fmt.Errorf("no available IP can support all requested ports")
+}
+
+// splitPorts separates specified and auto-assigned ports.
+func splitPorts(ports []clv1alpha2.PublicServicePort) (specified, auto []clv1alpha2.PublicServicePort) {
+	for _, p := range ports {
+		if p.Port != 0 {
+			specified = append(specified, p)
+		} else {
+			auto = append(auto, p)
+		}
+	}
+	return
+}
+
+// tryAssignPorts tries to assign all specified and auto ports to the given IP.
+// Returns the assigned ports and true if successful.
+func tryAssignPorts(specified, auto []clv1alpha2.PublicServicePort, portsInUse map[int32]bool) ([]clv1alpha2.PublicServicePort, bool) {
+	assigned := make([]clv1alpha2.PublicServicePort, 0, len(specified)+len(auto))
+
+	// 1. Check specified ports
+	for _, port := range specified {
+		if portsInUse[port.Port] {
+			return nil, false
+		}
+		portsInUse[port.Port] = true
+		assigned = append(assigned, clv1alpha2.PublicServicePort{
+			Name:       port.Name,
+			Port:       port.Port,
+			TargetPort: port.TargetPort,
+			Protocol:   port.Protocol,
+		})
+	}
+
+	// 2. Assign auto ports
+	for _, port := range auto {
+		assignedPort := int32(0)
+		for p := int32(forge.BasePortForAutomaticAssignment); p <= 65535; p++ {
+			if !portsInUse[p] {
+				assignedPort = p
+				portsInUse[p] = true
+				break
+			}
+		}
+		if assignedPort == 0 {
+			return nil, false
+		}
+		assigned = append(assigned, clv1alpha2.PublicServicePort{
+			Name:       port.Name,
+			Port:       assignedPort,
+			TargetPort: port.TargetPort,
+			Protocol:   port.Protocol,
+		})
+	}
+	return assigned, true
+}
+
+// reorderIPPoolWithPreferredIP moves the preferred IP (from existing service) to the front of the pool.
+func reorderIPPoolWithPreferredIP(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, pool []string, lbIPsKey string) []string {
+	log := ctrl.LoggerFrom(ctx)
+	existingSvc := &v1.Service{
+		ObjectMeta: forge.ObjectMetaWithSuffix(instance, forge.LabelPublicExposureValue),
+	}
+	err := c.Get(ctx, types.NamespacedName{Name: existingSvc.Name, Namespace: instance.Namespace}, existingSvc)
+	if err != nil {
+		return pool
+	}
+	var preferredIP string
+	if ip, ok := existingSvc.Annotations[lbIPsKey]; ok && ip != "" {
+		preferredIP = ip
+	} else if len(existingSvc.Status.LoadBalancer.Ingress) > 0 {
+		preferredIP = existingSvc.Status.LoadBalancer.Ingress[0].IP
+	}
+	if preferredIP == "" {
+		return pool
+	}
+
+	var found bool
+	var newPool []string
+	for i, ip := range pool {
+		if ip == preferredIP {
+			found = true
+			// Place preferredIP at the front, keeping the relative order of the others
+			newPool = append([]string{preferredIP}, append(pool[:i], pool[i+1:]...)...)
+			break
+		}
+	}
+	if found {
+		return newPool
+	}
+	log.Info("Preferred IP from existing service is no longer in the current IPPool, ignoring", "ip", preferredIP, "service", existingSvc.Name)
+	return pool
 }
 
 // UpdateUsedPortsByIP scans LoadBalancer services with the specific public-exposure label
