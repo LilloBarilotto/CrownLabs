@@ -299,29 +299,33 @@ spec:
     ports: []`;
   }
 
-  // Ensure all required fields are present according to CRD
+  // Ensure all required fields are present according to CRD and properly escape names
   const portsFormatted = portsNormalized.map(p => ({
-    name: p.name,
+    name: p.name.trim(), // Trim whitespace
     targetPort: p.targetPort,
     port: p.port,
-    protocol: p.protocol,
+    protocol: p.protocol.toUpperCase(), // Ensure uppercase protocol
   }));
 
-  // Build YAML string with correct indentation
+  // Build YAML string with correct indentation and proper quoting for names with spaces
   const yamlPorts = portsFormatted
-    .map(
-      p =>
-        `    - name: ${p.name}
+    .map(p => {
+      // Always quote names to avoid YAML parsing issues with spaces and special characters
+      const quotedName = `"${p.name}"`;
+      
+      return `    - name: ${quotedName}
       targetPort: ${p.targetPort}
       port: ${p.port}
-      protocol: ${p.protocol}`,
-    )
+      protocol: ${p.protocol}`;
+    })
     .join('\n');
 
-  return `apiVersion: crownlabs.polito.it/v1alpha2
+  const finalPatch = `apiVersion: crownlabs.polito.it/v1alpha2
 kind: Instance
 spec:
   publicExposure:
     ports:
 ${yamlPorts}`;
+  
+  return finalPatch;
 }
