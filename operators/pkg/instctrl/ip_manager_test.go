@@ -16,7 +16,6 @@ package instctrl_test
 
 import (
 	"context"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,11 +29,6 @@ import (
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/instctrl"
 )
-
-func TestIPManager(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "IPManager Suite")
-}
 
 var _ = Describe("IPManager", func() {
 	var (

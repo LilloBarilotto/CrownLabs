@@ -16,7 +16,6 @@ package instctrl_test
 
 import (
 	"context"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -32,10 +31,6 @@ import (
 
 // No setup function needed: all tests are pure unit tests with fake client and in-memory objects
 
-func TestPublicExposureFunctions(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "PublicExposure Suite")
-}
 
 var _ = Describe("PublicExposure", func() {
 	var (
