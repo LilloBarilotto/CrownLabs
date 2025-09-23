@@ -54,7 +54,7 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 }
 
 // FindBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
-func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, c client.Client, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool, currentIP string) (string, []clv1alpha2.PublicServicePort, error) {
+func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool, currentIP string) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
 	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureOpts.IPPool, usedPortsByIP)

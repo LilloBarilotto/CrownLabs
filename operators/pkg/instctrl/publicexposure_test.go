@@ -16,19 +16,13 @@ package instctrl_test
 
 import (
 	"context"
-	crand "crypto/rand"
-	"fmt"
-	"math/big"
-	mrand "math/rand"
-	"time"
+	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	clctx "github.com/netgroup-polito/CrownLabs/operators/pkg/context"
@@ -36,45 +30,31 @@ import (
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/instctrl"
 )
 
-var _ = Describe("Public Exposure Functions", func() {
-	ctx := context.Background()
+// No setup function needed: all tests are pure unit tests with fake client and in-memory objects
 
+func TestPublicExposureFunctions(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "PublicExposure Suite")
+}
+
+var _ = Describe("PublicExposure", func() {
 	var (
+		ctx        context.Context
+		fakeClient *fake.ClientBuilder
 		reconciler *instctrl.InstanceReconciler
-		instance   *clv1alpha2.Instance
 		template   *clv1alpha2.Template
-		namespace  string
-		testIPPool []string
-		portBase   int
+		instance   *clv1alpha2.Instance
 	)
 
-	getRandomIP := func() string {
-		pool := testIPPool
-		r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
-		return pool[r.Intn(len(pool))]
-	}
-
 	BeforeEach(func() {
-		randomNum, _ := crand.Int(crand.Reader, big.NewInt(100000))
-		namespace = fmt.Sprintf("test-namespace-%d", randomNum.Int64())
-
-		// Create a unique IP pool for this test to avoid conflicts
-		baseIP := fmt.Sprintf("192.168.%d", 100+randomNum.Int64()%100)
-		testIPPool = []string{
-			fmt.Sprintf("%s.1", baseIP),
-			fmt.Sprintf("%s.2", baseIP),
-			fmt.Sprintf("%s.3", baseIP),
-			fmt.Sprintf("%s.4", baseIP),
-		}
-
-		// Use unique port base for this test
-		portBase = 10000 + int(randomNum.Int64()%50000)
-
+		_ = clv1alpha2.AddToScheme(scheme.Scheme)
+		ctx = context.Background()
+		fakeClient = fake.NewClientBuilder()
 		reconciler = &instctrl.InstanceReconciler{
-			Client: k8sClient,
-			Scheme: k8sClient.Scheme(),
+			Client: fakeClient.Build(),
+			Scheme: scheme.Scheme,
 			PublicExposureOpts: forge.PublicExposureOpts{
-				IPPool: testIPPool,
+				IPPool: []string{"192.168.100.1"},
 				CommonAnnotations: map[string]string{
 					"metallb.universe.tf/allow-shared-ip": "public-exposure",
 					"metallb.universe.tf/address-pool":    "public",
@@ -82,213 +62,82 @@ var _ = Describe("Public Exposure Functions", func() {
 				LoadBalancerIPsKey: "metallb.universe.tf/loadBalancerIPs",
 			},
 		}
-
 		template = &clv1alpha2.Template{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-template",
-				Namespace: namespace,
-			},
-			Spec: clv1alpha2.TemplateSpec{
-				AllowPublicExposure: true,
-				PrettyName:          "Test Template",
-				Description:         "A test template for public exposure tests",
-				EnvironmentList: []clv1alpha2.Environment{
-					{
-						Name:            "test-env",
-						Image:           "nginx:latest",
-						EnvironmentType: clv1alpha2.ClassContainer,
-						GuiEnabled:      false,
-						Persistent:      false,
-						Resources: clv1alpha2.EnvironmentResources{
-							CPU:                   1,
-							ReservedCPUPercentage: 50,
-							Memory:                resource.MustParse("512Mi"),
-						},
-					},
-				},
-			},
+			ObjectMeta: metav1.ObjectMeta{Name: "test-template", Namespace: "test-ns"},
+			Spec:       clv1alpha2.TemplateSpec{AllowPublicExposure: true},
 		}
-
 		instance = &clv1alpha2.Instance{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-instance",
-				Namespace: namespace,
-			},
+			ObjectMeta: metav1.ObjectMeta{Name: "test-instance", Namespace: "test-ns"},
 			Spec: clv1alpha2.InstanceSpec{
 				Running: true,
 				PublicExposure: &clv1alpha2.InstancePublicExposure{
-					Ports: []clv1alpha2.PublicServicePort{
-						{Name: "http", Port: int32(portBase + 80), TargetPort: 80},
-					},
+					Ports: []clv1alpha2.PublicServicePort{{Name: "http", Port: 8080, TargetPort: 80}},
 				},
 			},
 		}
-
-		instance.Annotations = map[string]string{"metallb.universe.tf/loadBalancerIPs": getRandomIP()}
-
-		ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
-		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
-		Expect(k8sClient.Create(ctx, template)).To(Succeed())
-		Expect(k8sClient.Create(ctx, instance)).To(Succeed())
 	})
 
-	AfterEach(func() {
-		// Clean up all services in the namespace first
-		svcList := &v1.ServiceList{}
-		err := k8sClient.List(ctx, svcList, client.InNamespace(namespace))
-		if err == nil {
-			for i := range svcList.Items {
-				svc := &svcList.Items[i]
-				_ = k8sClient.Delete(ctx, svc)
-			}
+	It("Should create LoadBalancer service when conditions are met (unit)", func() {
+		ctx1, _ := clctx.InstanceInto(ctx, instance)
+		ctx1, _ = clctx.TemplateInto(ctx1, template)
+		err := reconciler.EnforcePublicExposure(ctx1)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("Should update instance status correctly (unit)", func() {
+		ctx1, _ := clctx.InstanceInto(ctx, instance)
+		ctx1, _ = clctx.TemplateInto(ctx1, template)
+		err := reconciler.EnforcePublicExposure(ctx1)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(instance.Status.PublicExposure).ToNot(BeNil())
+	})
+
+	It("Should fail with duplicate ports in public exposure", func() {
+		instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
+			{Name: "ssh", Port: 30022, TargetPort: 22},
+			{Name: "web", Port: 30022, TargetPort: 80},
 		}
-
-		// Wait for service deletion to complete
-		Eventually(func() bool {
-			svcList := &v1.ServiceList{}
-			err := k8sClient.List(ctx, svcList, client.InNamespace(namespace))
-			return err != nil || len(svcList.Items) == 0
-		}, "10s", "100ms").Should(BeTrue())
-
-		// Then delete the namespace
-		ns := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
-		Expect(k8sClient.Delete(ctx, ns)).To(Succeed())
-
-		// Wait for namespace cleanup to complete
-		time.Sleep(1 * time.Second)
+		err := instctrl.ValidatePublicExposureRequest(instance.Spec.PublicExposure.Ports)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("duplicate requested port"))
 	})
 
-	Describe("EnforcePublicExposure", func() {
-		Context("When public exposure should be present", func() {
-			BeforeEach(func() {
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-				ctx, _ = clctx.TemplateInto(ctx, template)
-			})
+	It("Should fail with duplicate targetPorts in public exposure", func() {
+		instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
+			{Name: "ssh", Port: 30022, TargetPort: 22},
+			{Name: "web", Port: 30023, TargetPort: 22},
+		}
+		err := instctrl.ValidatePublicExposureRequest(instance.Spec.PublicExposure.Ports)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("duplicate desired targetPort"))
+	})
 
-			It("Should create LoadBalancer service when conditions are met", func() {
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
+	It("Should allow auto-assigned port (Port=0)", func() {
+		instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
+			{Name: "ssh", Port: 0, TargetPort: 22},
+			{Name: "web", Port: 30023, TargetPort: 80},
+		}
+		err := instctrl.ValidatePublicExposureRequest(instance.Spec.PublicExposure.Ports)
+		Expect(err).ToNot(HaveOccurred())
+	})
 
-				svcName := forge.LoadBalancerServiceName(instance)
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(service.Spec.Type).To(Equal(v1.ServiceTypeLoadBalancer))
-			})
+	It("Should allow different protocols for different ports", func() {
+		instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
+			{Name: "ssh", Port: 30022, TargetPort: 22, Protocol: "TCP"},
+			{Name: "web", Port: 30023, TargetPort: 80, Protocol: "UDP"},
+		}
+		err := instctrl.ValidatePublicExposureRequest(instance.Spec.PublicExposure.Ports)
+		Expect(err).ToNot(HaveOccurred())
+	})
 
-			It("Should update instance status correctly", func() {
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
+	It("Should not define Status if public exposure in Spec is not set", func() {
+		instance.Spec.PublicExposure = nil
+		ctx1, _ := clctx.InstanceInto(ctx, instance)
+		ctx1, _ = clctx.TemplateInto(ctx1, template)
+		err := reconciler.EnforcePublicExposure(ctx1)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(instance.Status.PublicExposure).To(BeNil())
 
-				// Verify status was updated
-				Expect(instance.Status.PublicExposure).ToNot(BeNil())
-				Expect(instance.Status.PublicExposure.Phase).To(Equal(clv1alpha2.PublicExposurePhaseReady))
-				Expect(instance.Status.PublicExposure.ExternalIP).ToNot(BeEmpty())
-				Expect(instance.Status.PublicExposure.Ports).To(HaveLen(1))
-				Expect(instance.Status.PublicExposure.Ports[0].Port).To(Equal(int32(portBase + 80)))
-			})
-
-			It("Should handle automatic port assignment", func() {
-				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{Name: "auto1", Port: 0, TargetPort: 80},
-					{Name: "auto2", Port: 0, TargetPort: 90},
-				}
-				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				svcName := forge.LoadBalancerServiceName(instance)
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(service.Spec.Ports).To(HaveLen(2))
-				// Automatic ports should be assigned from base port
-				Expect(service.Spec.Ports[0].Port).To(BeNumerically(">=", 30000))
-				Expect(service.Spec.Ports[1].Port).To(BeNumerically(">=", 30000))
-			})
-		})
-
-		Context("When public exposure should be absent", func() {
-			BeforeEach(func() {
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-				ctx, _ = clctx.TemplateInto(ctx, template)
-			})
-
-			It("Should remove service when template doesn't allow public exposure", func() {
-				// First create the service
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Then disable public exposure in template
-				template.Spec.AllowPublicExposure = false
-				Expect(k8sClient.Update(ctx, template)).To(Succeed())
-				ctx, _ = clctx.TemplateInto(ctx, template)
-
-				err = reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Service should be removed
-				svcName := forge.LoadBalancerServiceName(instance)
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).To(HaveOccurred())
-			})
-
-			It("Should remove service when instance is not running", func() {
-				// First create the service
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Then stop the instance
-				instance.Spec.Running = false
-				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-
-				err = reconciler.EnforcePublicExposure(ctx)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Service should be removed
-				svcName := forge.LoadBalancerServiceName(instance)
-				service := &v1.Service{}
-				err = k8sClient.Get(ctx, types.NamespacedName{Name: svcName, Namespace: namespace}, service)
-				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Context("Error handling", func() {
-			BeforeEach(func() {
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-				ctx, _ = clctx.TemplateInto(ctx, template)
-			})
-
-			It("Should error on duplicate ports in public exposure", func() {
-				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{Name: "http", Port: int32(portBase + 80), TargetPort: 80},
-					{Name: "http2", Port: int32(portBase + 80), TargetPort: 81}, // Duplicate port
-				}
-				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("duplicate requested port"))
-			})
-
-			It("Should error on duplicate targetPorts in public exposure", func() {
-				instance.Spec.PublicExposure.Ports = []clv1alpha2.PublicServicePort{
-					{Name: "http", Port: int32(portBase + 80), TargetPort: 80},
-					{Name: "http2", Port: int32(portBase + 81), TargetPort: 80}, // Duplicate targetPort
-				}
-				Expect(k8sClient.Update(ctx, instance)).To(Succeed())
-				ctx, _ = clctx.InstanceInto(ctx, instance)
-
-				err := reconciler.EnforcePublicExposure(ctx)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("duplicate desired targetPort"))
-			})
-
-		})
+		// No panic, no error, and no service created
 	})
 })

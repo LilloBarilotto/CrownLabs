@@ -54,7 +54,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 	instance.Status.PublicExposure.Message = "Provisioning public exposure: allocating IP and ports"
 
 	// Validate the public exposure request first.
-	if err := validatePublicExposureRequest(instance.Spec.PublicExposure.Ports); err != nil {
+	if err := ValidatePublicExposureRequest(instance.Spec.PublicExposure.Ports); err != nil {
 		log.Error(err, "invalid public exposure request")
 		instance.Status.PublicExposure.Phase = clv1alpha2.PublicExposurePhaseError
 		instance.Status.PublicExposure.Message = "Invalid public exposure request: " + err.Error()
@@ -113,7 +113,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 		}
 
 		// Find the best IP and ports to assign using the logic from ip_manager.go
-		targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, r.Client, instance, usedPortsByIP, currentIP)
+		targetIP, assignedPorts, err := r.FindBestIPAndAssignPorts(ctx, instance, usedPortsByIP, currentIP)
 		if err != nil {
 			return fmt.Errorf("failed to assign IP and ports for public exposure: %w", err)
 		}
@@ -190,8 +190,8 @@ func (r *InstanceReconciler) enforcePublicExposureAbsence(ctx context.Context) e
 	return nil
 }
 
-// validatePublicExposureRequest checks for duplicates in ports and targetPorts.
-func validatePublicExposureRequest(ports []clv1alpha2.PublicServicePort) error {
+// ValidatePublicExposureRequest checks for duplicates in ports and targetPorts.
+func ValidatePublicExposureRequest(ports []clv1alpha2.PublicServicePort) error {
 	seenPorts := make(map[int32]bool)
 	seenTargetPorts := make(map[int32]bool)
 
