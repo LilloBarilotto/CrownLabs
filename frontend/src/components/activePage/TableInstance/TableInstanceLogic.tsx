@@ -98,6 +98,10 @@ const TableInstanceLogic: FC<ITableInstanceLogicProps> = ({ ...props }) => {
                   instances = instances.map(replaceK8sObject(instance));
                   notify = true;
                   break;
+                case SubObjType.PublicExposureChange:
+                  instances = instances.map(replaceK8sObject(instance));
+                  notify = false;
+                  break;
                 case SubObjType.Drop:
                   notify = false;
                   break;

@@ -45,6 +45,7 @@ export enum SubObjType {
   PrettyName,
   Addition,
   Drop,
+  PublicExposureChange,
 }
 interface ItPolitoCrownlabsV1alpha2TemplateAlias {
   original: Nullable<DeepPartial<ItPolitoCrownlabsV1alpha2Template>>;
@@ -423,8 +424,8 @@ const getSubObjTypeK8sEnhanced = (
     const newStatusPE = JSON.stringify(newStatus?.publicExposure);
 
     if (oldSpecPE !== newSpecPE || oldStatusPE !== newStatusPE) {
-      // PublicExposure changed - treat as UpdatedInfo but without notification
-      return SubObjType.UpdatedInfo;
+      // PublicExposure changed - treat as PublicExposureChange without notification
+      return SubObjType.PublicExposureChange;
     }
 
     return SubObjType.Drop;
