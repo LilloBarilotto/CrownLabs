@@ -179,7 +179,7 @@ const TemplatesTableRow: FC<ITemplatesTableRowProps> = ({ ...props }) => {
                 <Space>
                   {template.name}
                   {template.allowPublicExposure && (
-                    <Tooltip title="Port Exposure Available">
+                    <Tooltip title="Public Port Exposure - This template allows exposing internal ports to external networks for remote access">
                       <ExportOutlined className="text-fuchsia-400" />
                     </Tooltip>
                   )}
