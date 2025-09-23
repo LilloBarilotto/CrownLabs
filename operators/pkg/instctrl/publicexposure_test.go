@@ -31,7 +31,6 @@ import (
 
 // No setup function needed: all tests are pure unit tests with fake client and in-memory objects
 
-
 var _ = Describe("PublicExposure", func() {
 	var (
 		ctx        context.Context

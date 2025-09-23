@@ -264,9 +264,23 @@ func needsServiceUpdate(specPorts, statusPorts, svcPorts []clv1alpha2.PublicServ
 		}
 		return false
 	}
+	// Helper: for ports with Port==0 in spec, check that in status and svc the corresponding port is not also specified (i.e., it must be auto-assigned )
+	autoPortMismatch := func(ports []clv1alpha2.PublicServicePort, ref clv1alpha2.PublicServicePort) bool {
+		for _, q := range ports {
+			if q.Name == ref.Name && q.TargetPort == ref.TargetPort && q.Protocol == ref.Protocol && q.Port < forge.BasePortForAutomaticAssignment {
+				return true
+			}
+		}
+		return false
+	}
+
 	for _, p := range specPorts {
 		if p.Port != 0 {
 			if !portMatch(statusPorts, p) || !portMatch(svcPorts, p) {
+				return true
+			}
+		} else {
+			if autoPortMismatch(statusPorts, p) || autoPortMismatch(svcPorts, p) {
 				return true
 			}
 		}
