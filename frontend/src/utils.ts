@@ -88,7 +88,11 @@ export type PortListItem = {
   // Additional fields to track desired vs actual ports
   _actualPort?: string;
   _desiredPort?: string;
+  // New fields to preserve spec vs status information
+  isAutoPort?: boolean;
+  specPort?: number;
 };
+
 export enum LinkPosition {
   MenuButton,
   NavbarButton,
@@ -274,9 +278,9 @@ export function enumKeyFromVal<T extends Record<string, string | number>>(
 }
 
 /**
- * Build JSON patch string for updating publicExposure ports on an Instance.
+ * Build YAML patch string for updating publicExposure ports on an Instance.
  * @param portsNormalized entries with name, targetPort, port, and protocol
- * @returns JSON patch string
+ * @returns YAML patch string
  */
 export function buildPublicExposurePatch(
   portsNormalized: Array<{
@@ -288,16 +292,11 @@ export function buildPublicExposurePatch(
 ): string {
   // Handle empty ports array case - this will disable public exposure completely
   if (portsNormalized.length === 0) {
-    const payload = {
-      apiVersion: 'crownlabs.polito.it/v1alpha2',
-      kind: 'Instance',
-      spec: {
-        publicExposure: {
-          ports: [],
-        },
-      },
-    };
-    return JSON.stringify(payload);
+    return `apiVersion: crownlabs.polito.it/v1alpha2
+kind: Instance
+spec:
+  publicExposure:
+    ports: []`;
   }
 
   // Ensure all required fields are present according to CRD
@@ -308,10 +307,21 @@ export function buildPublicExposurePatch(
     protocol: p.protocol,
   }));
 
-  const payload = {
-    apiVersion: 'crownlabs.polito.it/v1alpha2',
-    kind: 'Instance',
-    spec: { publicExposure: { ports: portsFormatted } },
-  };
-  return JSON.stringify(payload);
+  // Build YAML string with correct indentation
+  const yamlPorts = portsFormatted
+    .map(
+      p =>
+        `    - name: ${p.name}
+      targetPort: ${p.targetPort}
+      port: ${p.port}
+      protocol: ${p.protocol}`,
+    )
+    .join('\n');
+
+  return `apiVersion: crownlabs.polito.it/v1alpha2
+kind: Instance
+spec:
+  publicExposure:
+    ports:
+${yamlPorts}`;
 }

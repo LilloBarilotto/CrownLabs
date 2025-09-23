@@ -19,6 +19,7 @@ import { useApplyInstanceMutation } from '../../../../generated-types';
 import {
   buildPublicExposurePatch,
   type PublicExposure,
+  type PortListItem,
 } from '../../../../utils';
 import { Phase } from '../../../../generated-types';
 const { Text } = Typography;
@@ -64,50 +65,62 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
   const [applyInstanceMutation, { loading, error }] =
     useApplyInstanceMutation();
 
-  const getInitialPorts = useMemo((): PortField[] => {
-    if (
-      existingExposure?.ports &&
-      Array.isArray(existingExposure.ports) &&
-      existingExposure.ports.length > 0
-    ) {
-      return existingExposure.ports.map(p => ({
-        name: p?.name || '',
-        targetPort: p?.targetPort ? String(p.targetPort) : '',
-        desiredPort: allowPublicExposure
-          ? p?.port === '0' || !p?.port
-            ? ''
-            : String(p.port)
-          : '',
-        protocol: ['TCP', 'UDP', 'SCTP'].includes(
-          (p as { protocol?: string })?.protocol ?? '',
-        )
-          ? ((p as { protocol?: string })?.protocol ?? 'TCP')
-          : 'TCP',
-        _displayActualPort: p?.port && p.port !== '0' ? String(p.port) : '',
-      }));
-    }
-    return [
-      {
-        name: '',
-        targetPort: '',
-        desiredPort: '',
-        protocol: 'TCP',
-        _displayActualPort: '',
-      },
-    ];
-  }, [existingExposure, allowPublicExposure]);
+  const getInitialPorts = useCallback(
+    (exposurePorts: PortListItem[]) => {
+      return exposurePorts.map(p => {
+        let desiredPort = '';
+
+        // If this port was originally requested as Auto (spec.port = 0),
+        // show "Auto" placeholder regardless of assigned port
+        if (p.isAutoPort || p.specPort === 0) {
+          desiredPort = '';
+        } else {
+          // If this port was specifically requested (spec.port ≠ 0),
+          // show the originally requested port number
+          desiredPort = String(p.specPort);
+        }
+
+        return {
+          targetPort: String(p.targetPort), // Convert to string to match PortField.targetPort
+          protocol: p.protocol as 'TCP' | 'UDP' | 'SCTP',
+          name: p.name,
+          desiredPort: allowPublicExposure ? desiredPort : p.port || '',
+          _displayActualPort: p.port && p.port !== '0' ? String(p.port) : '',
+        };
+      });
+    },
+    [allowPublicExposure],
+  );
 
   useEffect(() => {
     if (open) {
-      const initialPorts = getInitialPorts;
+      const existingPorts = existingExposure?.ports || [];
+      let initialPorts;
+
+      if (existingPorts.length > 0) {
+        // If there are existing ports, use them
+        initialPorts = getInitialPorts(existingPorts);
+      } else {
+        // If no existing ports, start with one empty row
+        initialPorts = [
+          {
+            name: '',
+            targetPort: '',
+            desiredPort: '',
+            protocol: 'TCP',
+            _displayActualPort: '',
+          },
+        ];
+      }
+
       form.setFieldsValue({ ports: initialPorts });
     }
-  }, [open, form, getInitialPorts]);
+  }, [open, form, getInitialPorts, existingExposure?.ports]);
 
   useEffect(() => {
     if (open && existingExposure && !isUpdating) {
       const currentPorts = form.getFieldValue('ports') || [];
-      const newInitialPorts = getInitialPorts;
+      const newInitialPorts = getInitialPorts(existingExposure.ports || []);
 
       const hasSignificantChanges =
         newInitialPorts.length !== currentPorts.length ||
@@ -118,8 +131,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
             cp.targetPort !== np.targetPort ||
             cp.name !== np.name ||
             cp.protocol !== np.protocol ||
-            cp.desiredPort !== np.desiredPort ||
-            cp._displayActualPort !== np._displayActualPort
+            cp.desiredPort !== np.desiredPort
           );
         });
 
@@ -185,6 +197,24 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
     );
   }, [ports]);
 
+  const duplicateRequestedPorts = useMemo(() => {
+    if (!ports || !Array.isArray(ports) || !allowPublicExposure) return [];
+
+    const requestedPorts = ports
+      .filter(
+        p =>
+          p?.desiredPort &&
+          p.desiredPort.trim() !== '' &&
+          p.desiredPort.trim() !== '0',
+      )
+      .map(p => parseInt(p?.desiredPort || '0', 10))
+      .filter(port => !isNaN(port) && port > 0);
+
+    return requestedPorts.filter(
+      (port, index) => requestedPorts.indexOf(port) !== index,
+    );
+  }, [ports, allowPublicExposure]);
+
   const addButtonText =
     !ports || ports.length === 0 ? 'Add Port' : '+ Add Port';
 
@@ -192,7 +222,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
     if (!ports) return false;
 
     const currentPorts = ports || [];
-    const initialPorts = getInitialPorts;
+    const initialPorts = getInitialPorts(existingExposure?.ports || []);
 
     if (currentPorts.length !== initialPorts.length) {
       return true;
@@ -209,11 +239,12 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
         currentPort?.desiredPort !== initialPort?.desiredPort
       );
     });
-  }, [ports, getInitialPorts]);
+  }, [ports, getInitialPorts, existingExposure?.ports]);
 
   const isSendDisabled =
     isUpdating ||
     duplicateTargetPorts.length > 0 ||
+    duplicateRequestedPorts.length > 0 ||
     !hasUnsavedChanges ||
     (!hasValidPorts &&
       ports &&
@@ -253,6 +284,35 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
         },
       ]);
       return;
+    }
+
+    // Check for duplicate requested ports (only when allowPublicExposure is true)
+    if (allowPublicExposure) {
+      const requestedPorts = validPorts
+        .filter(
+          p =>
+            p?.desiredPort &&
+            p.desiredPort.trim() !== '' &&
+            p.desiredPort.trim() !== '0',
+        )
+        .map(p => parseInt(p?.desiredPort || '0', 10))
+        .filter(port => !isNaN(port) && port > 0);
+
+      const duplicateRequestedPorts = requestedPorts.filter(
+        (port, index) => requestedPorts.indexOf(port) !== index,
+      );
+
+      if (duplicateRequestedPorts.length > 0) {
+        form.setFields([
+          {
+            name: ['ports'],
+            errors: [
+              `Cannot request the same port multiple times. Duplicate requested ports: ${[...new Set(duplicateRequestedPorts)].join(', ')}`,
+            ],
+          },
+        ]);
+        return;
+      }
     }
 
     const targetPortCounts = new Map<number, number>();
@@ -410,9 +470,31 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
           onFinish={onFinish}
           autoComplete="off"
           layout="vertical"
+          scrollToFirstError={{ behavior: 'smooth', block: 'center' }}
         >
           <Form.List name="ports">
-            {(fields, { add, remove }) => (
+            {(fields, { add, remove }) => {
+              // Function to add a port and scroll to it using Antd native API
+              const handleAddPort = () => {
+                const newIndex = fields.length;
+                add({
+                  name: '',
+                  targetPort: '',
+                  desiredPort: '',
+                  _displayActualPort: '',
+                  protocol: 'TCP',
+                });
+                
+                // Use Antd's scrollToField to scroll to the newly added field
+                setTimeout(() => {
+                  form.scrollToField(['ports', newIndex, 'targetPort'], {
+                    behavior: 'smooth',
+                    block: 'center',
+                  });
+                }, 100); // Small delay to ensure the new element is rendered
+              };
+
+              return (
               <>
                 <div
                   className="ant-modal-body"
@@ -537,15 +619,7 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                 <Form.Item style={{ textAlign: 'center', marginTop: '24px' }}>
                   <Button
                     type="dashed"
-                    onClick={() =>
-                      add({
-                        name: '',
-                        targetPort: '',
-                        desiredPort: '',
-                        _displayActualPort: '',
-                        protocol: 'TCP',
-                      })
-                    }
+                    onClick={handleAddPort}
                     disabled={isAddDisabled || isUpdating}
                   >
                     {addButtonText}
@@ -572,6 +646,14 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                   />
                 )}
 
+                {duplicateRequestedPorts.length > 0 && (
+                  <Alert
+                    type="error"
+                    message={`Cannot request the same port multiple times. Duplicate requested ports: ${[...new Set(duplicateRequestedPorts)].join(', ')}`}
+                    showIcon
+                  />
+                )}
+
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   {existingExposure?.externalIP &&
                   existingExposure.phase !== Phase.Off ? (
@@ -590,7 +672,8 @@ export const PublicExposureModal: FC<IPublicExposureModalProps> = ({
                   )}
                 </Text>
               </>
-            )}
+              );
+            }}
           </Form.List>
         </Form>
       </Spin>

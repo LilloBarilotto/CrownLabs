@@ -17,7 +17,13 @@ import type {
   UpdatedOwnedInstancesSubscriptionResult,
   WorkspacesListItem,
 } from './generated-types';
-import { AutoEnroll, Phase, Phase2, Phase5, UpdateType } from './generated-types';
+import {
+  AutoEnroll,
+  Phase,
+  Phase2,
+  Phase5,
+  UpdateType,
+} from './generated-types';
 import { getInstancePatchJson } from './graphql-components/utils';
 import type {
   Instance,
@@ -89,64 +95,106 @@ export const getInstanceLabels = (
 ): InstanceLabels | undefined => i.metadata?.labels as InstanceLabels;
 
 // Helper functions for type conversions
-const safePhaseConversion = (phase: any): Phase => {
+const safePhaseConversion = (phase: unknown): Phase => {
   return (phase as Phase) || Phase.Off;
 };
 
-const safePhase5Conversion = (phase: any): Phase5 => {
+const safePhase5Conversion = (phase: unknown): Phase5 => {
   return (phase as Phase5) || Phase5.Pending;
 };
 
-const safeWorkspaceRoleConversion = (role: any): WorkspaceRole => {
+const safeWorkspaceRoleConversion = (role: unknown): WorkspaceRole => {
   return (role as WorkspaceRole) || WorkspaceRole.user;
 };
 
 // Helper functions for public exposure logic
+interface PublicExposurePort {
+  name?: string;
+  port?: number;
+  targetPort?: number;
+  protocol?: 'TCP' | 'UDP' | 'SCTP';
+}
+
+interface PublicExposureSpec {
+  ports?: PublicExposurePort[];
+}
+
+interface PublicExposureStatus {
+  externalIP?: string;
+  phase?: Phase;
+  ports?: PublicExposurePort[];
+}
+
 const hasActivePublicExposure = (
-  publicExposure: any,
-  publicExposureStatus: any
-) => {
-  return (
-    (publicExposure &&
-      publicExposure.ports &&
-      publicExposure.ports.length > 0) ||
-    (publicExposureStatus &&
-      publicExposureStatus.ports &&
-      publicExposureStatus.ports.length > 0 &&
-      safePhaseConversion(publicExposureStatus.phase) !== Phase.Off)
+  publicExposure: unknown,
+  publicExposureStatus: unknown,
+): boolean => {
+  const spec = publicExposure as PublicExposureSpec;
+  const status = publicExposureStatus as PublicExposureStatus;
+
+  return Boolean(
+    (spec?.ports && spec.ports.length > 0) ||
+      (status?.ports &&
+        status.ports.length > 0 &&
+        safePhaseConversion(status.phase) !== Phase.Off),
   );
 };
 
-const getPortsToUse = (publicExposureStatus: any, publicExposure: any) => {
-  return publicExposureStatus?.ports && publicExposureStatus.ports.length > 0
-    ? publicExposureStatus.ports
-    : (publicExposure?.ports ?? []);
+const mapPortToPortListItem = (p: unknown, specPort?: unknown) => {
+  const port = p as PublicExposurePort;
+  const spec = specPort as PublicExposurePort;
+
+  // Use spec port information to preserve original user request
+  // If specPort is 0, it means "Auto" was requested, so we preserve that info
+  const isAutoPort = spec?.port === 0;
+
+  return {
+    name: port.name || '',
+    port: port.port && port.port > 0 ? String(port.port) : '',
+    targetPort: port.targetPort || 0,
+    protocol: port.protocol || 'TCP',
+    // Add metadata to distinguish between auto and manually requested ports
+    isAutoPort: isAutoPort,
+    specPort: spec?.port || 0, // Original spec.port value
+  };
 };
 
-const mapPortToPortListItem = (p: any) => ({
-  name: p.name || '',
-  port: p.port && p.port > 0 ? String(p.port) : '',
-  targetPort: p.targetPort || 0,
-  protocol:
-    (p as { protocol?: 'TCP' | 'UDP' | 'SCTP' })?.protocol || 'TCP',
-});
-
 const buildPublicExposureObject = (
-  publicExposure: any,
-  publicExposureStatus: any
+  publicExposure: unknown,
+  publicExposureStatus: unknown,
 ) => {
   if (!hasActivePublicExposure(publicExposure, publicExposureStatus)) {
     return undefined;
   }
 
-  const portsToUse = getPortsToUse(publicExposureStatus, publicExposure);
-  
+  const spec = publicExposure as PublicExposureSpec;
+  const status = publicExposureStatus as PublicExposureStatus;
+
+  const statusPorts = status?.ports || [];
+  const specPorts = spec?.ports || [];
+
+  // Create a map for matching status ports with spec ports by targetPort
+  const specPortsByTarget = new Map<number, PublicExposurePort>();
+  specPorts.forEach(sp => {
+    if (sp?.targetPort) {
+      specPortsByTarget.set(sp.targetPort, sp);
+    }
+  });
+
+  const portsToUse = statusPorts.length > 0 ? statusPorts : specPorts;
+
   return {
-    externalIP: publicExposureStatus?.externalIP || '',
-    phase: safePhaseConversion(publicExposureStatus?.phase),
+    externalIP: status?.externalIP || '',
+    phase: safePhaseConversion(status?.phase),
     ports: portsToUse
-      ?.filter((p: any) => p != null)
-      .map(mapPortToPortListItem) || [],
+      .filter((p): p is PublicExposurePort => p != null)
+      .map(p => {
+        // Find matching spec port by targetPort to preserve original spec.port info
+        const matchingSpecPort = p.targetPort
+          ? specPortsByTarget.get(p.targetPort)
+          : undefined;
+        return mapPortToPortListItem(p, matchingSpecPort);
+      }),
   };
 };
 
@@ -214,7 +262,10 @@ export const makeGuiInstance = (
     allowPublicExposure,
     tenantDisplayName: '',
     myDriveUrl: '',
-    publicExposure: buildPublicExposureObject(publicExposure, publicExposureStatus),
+    publicExposure: buildPublicExposureObject(
+      publicExposure,
+      publicExposureStatus,
+    ),
   } as Instance;
 };
 
@@ -487,7 +538,10 @@ export const getManagerInstances = (
     running: spec?.running,
     allowPublicExposure,
     myDriveUrl: '',
-    publicExposure: buildPublicExposureObject(publicExposure, publicExposureStatus),
+    publicExposure: buildPublicExposureObject(
+      publicExposure,
+      publicExposureStatus,
+    ),
   } as Instance;
 };
 
