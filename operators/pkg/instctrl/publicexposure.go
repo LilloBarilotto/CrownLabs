@@ -101,7 +101,7 @@ func (r *InstanceReconciler) enforcePublicExposurePresence(ctx context.Context) 
 			}
 			if !needsServiceUpdate(specPorts, statusPorts, svcPorts) {
 				// If the current IP is valid and the requested ports match the current ones, do nothing, already in desired state
-				log.V(1).Info("LoadBalancer service already in desired state", "service", service.GetName())
+				log.Info("LoadBalancer service already in desired state", "service", service.GetName())
 				return nil
 			}
 		}

@@ -56,9 +56,9 @@ func (r *InstanceReconciler) BuildPrioritizedIPPool(fullPool []string, usedPorts
 // FindBestIPAndAssignPorts finds the best IP for the requested ports and handles port assignment.
 func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, instance *clv1alpha2.Instance, usedPortsByIP map[string]map[int32]bool, currentIP string) (string, []clv1alpha2.PublicServicePort, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
+	log.Info("Starting IP and port assignment for public exposure", "instance", instance.Name)
 	prioritizedIPPool := r.BuildPrioritizedIPPool(r.PublicExposureOpts.IPPool, usedPortsByIP)
-	log.V(1).Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
+	log.Info("Prioritized IP pool for evaluation", "pool", prioritizedIPPool)
 
 	// Move the preferred IP (if any) to the front of the pool.
 	prioritizedIPPool = reorderIPPoolWithPreferredIP(prioritizedIPPool, currentIP)
@@ -66,7 +66,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, insta
 	specifiedPorts, autoPorts := splitPorts(instance.Spec.PublicExposure.Ports)
 
 	for _, ip := range prioritizedIPPool {
-		log.V(1).Info("Checking IP for port availability", "ip", ip)
+		log.Info("Checking IP for port availability", "ip", ip)
 		portsInUse := usedPortsByIP[ip]
 		if portsInUse == nil {
 			portsInUse = make(map[int32]bool)
@@ -77,7 +77,7 @@ func (r *InstanceReconciler) FindBestIPAndAssignPorts(ctx context.Context, insta
 			log.Info("Found compatible IP and assigned all ports", "ip", ip, "ports", assignedPorts)
 			return ip, assignedPorts, nil
 		}
-		log.V(1).Info("IP not compatible with requested ports", "ip", ip)
+		log.Info("IP not compatible with requested ports", "ip", ip)
 	}
 
 	log.Error(fmt.Errorf("no available IP can support all requested ports"), "IP/port assignment failed for instance", "instance", instance.Name)
@@ -201,7 +201,7 @@ func UpdateUsedPortsByIP(ctx context.Context, c client.Client, excludeSvcName, e
 
 		for _, port := range svc.Spec.Ports {
 			usedPortsByIP[externalIP][port.Port] = true
-			log.V(1).Info("Port marked as in use", "ip", externalIP, "port", port.Port, "service", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
+			log.Info("Port marked as in use", "ip", externalIP, "port", port.Port, "service", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 		}
 	}
 
