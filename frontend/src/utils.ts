@@ -299,21 +299,22 @@ spec:
     ports: []`;
   }
 
-  // Ensure all required fields are present according to CRD and properly escape names
+  // Ensure all required fields are present according to CRD and sanitize names
   const portsFormatted = portsNormalized.map(p => ({
-    name: p.name.trim(), // Trim whitespace
+    // Sanitize name: replace spaces with hyphens and remove special characters
+    name: p.name.trim()
+      .replace(/\s+/g, '-')      // Replace one or more spaces with single hyphen
+      .replace(/[^a-zA-Z0-9-]/g, '')  // Remove any non-alphanumeric characters except hyphens
+      .toLowerCase(),             // Convert to lowercase for consistency
     targetPort: p.targetPort,
     port: p.port,
     protocol: p.protocol.toUpperCase(), // Ensure uppercase protocol
   }));
 
-  // Build YAML string with correct indentation and proper quoting for names with spaces
+  // Build YAML string with correct indentation (names are now sanitized, no quotes needed)
   const yamlPorts = portsFormatted
     .map(p => {
-      // Always quote names to avoid YAML parsing issues with spaces and special characters
-      const quotedName = `"${p.name}"`;
-      
-      return `    - name: ${quotedName}
+      return `    - name: ${p.name}
       targetPort: ${p.targetPort}
       port: ${p.port}
       protocol: ${p.protocol}`;
