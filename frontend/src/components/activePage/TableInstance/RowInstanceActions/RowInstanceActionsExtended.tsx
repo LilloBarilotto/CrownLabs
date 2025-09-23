@@ -1,6 +1,6 @@
 import type { FC, SetStateAction } from 'react';
 import { useState } from 'react';
-import { Popover, Tooltip, Typography } from 'antd';
+import { Badge, Popover, Tooltip, Typography } from 'antd';
 import { Button } from 'antd';
 import { InfoOutlined } from '@ant-design/icons';
 import { ExportOutlined } from '@ant-design/icons';
@@ -116,12 +116,25 @@ const RowInstanceActionsExtended: FC<IRowInstanceActionsExtendedProps> = ({
 
         {instance.allowPublicExposure && (
           <Tooltip title="Manage Public Exposure">
-            <Button
-              className="hidden mr-3 xl:inline-block"
-              shape="circle"
-              icon={<ExportOutlined style={{ fontSize: '16px' }} />}
-              onClick={() => setShowExposureModal(true)}
-            />
+            <Badge
+              count={
+                instance.publicExposure &&
+                Array.isArray(instance.publicExposure.ports) &&
+                instance.publicExposure.ports.length > 0
+                  ? instance.publicExposure.ports.length
+                  : 0
+              }
+              showZero={false}
+              size="small"
+              offset={[-8, 8]}
+            >
+              <Button
+                className="hidden mr-3 xl:inline-block"
+                shape="circle"
+                icon={<ExportOutlined style={{ fontSize: '16px' }} />}
+                onClick={() => setShowExposureModal(true)}
+              />
+            </Badge>
           </Tooltip>
         )}
       </div>
