@@ -232,6 +232,14 @@ export const makeGuiInstance = (
 
   const instanceID = tenantNamespace + '/' + metadata?.name;
 
+  const publicExposureObj = buildPublicExposureObject(
+    publicExposure,
+    publicExposureStatus,
+  );
+  // Normalize ports to [] if null/undefined
+  if (publicExposureObj && !publicExposureObj.ports) {
+    publicExposureObj.ports = [];
+  }
   return {
     id: instanceID,
     name: name,
@@ -263,10 +271,7 @@ export const makeGuiInstance = (
     allowPublicExposure,
     tenantDisplayName: '',
     myDriveUrl: '',
-    publicExposure: buildPublicExposureObject(
-      publicExposure,
-      publicExposureStatus,
-    ),
+    publicExposure: publicExposureObj,
   } as Instance;
 };
 

@@ -117,13 +117,7 @@ const RowInstanceActionsExtended: FC<IRowInstanceActionsExtendedProps> = ({
         {instance.allowPublicExposure && (
           <Tooltip title="Manage Public Exposure">
             <Badge
-              count={
-                instance.publicExposure &&
-                Array.isArray(instance.publicExposure.ports) &&
-                instance.publicExposure.ports.length > 0
-                  ? instance.publicExposure.ports.length
-                  : 0
-              }
+              count={(instance.publicExposure?.ports ?? []).length}
               showZero={false}
               size="small"
               offset={[-8, 8]}
