@@ -145,8 +145,6 @@ spec:
                       - targetPort
                       type: object
                     type: array
-                required:
-                - ports
                 type: object
               running:
                 default: true

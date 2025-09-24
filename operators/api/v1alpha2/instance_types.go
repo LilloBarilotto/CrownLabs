@@ -150,7 +150,7 @@ type InstancePublicExposure struct {
 	// The list of ports to expose.
 	// If 'Port' is set to 0, a random port from the ephemeral range will be assigned.
 	// If no ports are specified, the service will not be exposed with a LoadBalancer
-	Ports []PublicServicePort `json:"ports"`
+	Ports []PublicServicePort `json:"ports,omitempty"`
 }
 
 // PublicServicePort defines the mapping of ports for a service.
