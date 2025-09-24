@@ -2,7 +2,7 @@ import {
   CodeOutlined,
   DesktopOutlined,
   PlayCircleOutlined,
-  ExportOutlined,
+  SelectOutlined,
 } from '@ant-design/icons';
 import { Space, Tooltip, Dropdown, Badge } from 'antd';
 import { Button } from 'antd';
@@ -180,7 +180,7 @@ const TemplatesTableRow: FC<ITemplatesTableRowProps> = ({ ...props }) => {
                   {template.name}
                   {template.allowPublicExposure && (
                     <Tooltip title="Public Port Exposure - This template allows exposing internal ports to external networks for remote access">
-                      <ExportOutlined className="text-fuchsia-400" />
+                      <SelectOutlined className="text-fuchsia-400" />
                     </Tooltip>
                   )}
                 </Space>

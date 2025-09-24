@@ -2,7 +2,7 @@ import { type FC, type SetStateAction, useContext, useState } from 'react';
 import { Dropdown, Badge, Space } from 'antd';
 import { Button } from 'antd';
 import {
-  ExportOutlined,
+  SelectOutlined,
   CodeOutlined,
   DeleteOutlined,
   FolderOpenOutlined,
@@ -122,7 +122,7 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
             key: 'connect',
             label: 'Connect',
             disabled: connectDisabled,
-            icon: <ExportOutlined style={font20px} />,
+            icon: <SelectOutlined style={font20px} />,
             onClick: gui
               ? () => window.open(url!, '_blank')
               : () => setSshModal(true),
@@ -166,7 +166,7 @@ const RowInstanceActionsDropdown: FC<IRowInstanceActionsDropdownProps> = ({
                         )}
                     </Space>
                   ),
-                  icon: <ExportOutlined style={font20px} />,
+                  icon: <SelectOutlined style={font20px} />,
                   onClick: () => onEnablePublicExposure?.(),
                 },
                 {

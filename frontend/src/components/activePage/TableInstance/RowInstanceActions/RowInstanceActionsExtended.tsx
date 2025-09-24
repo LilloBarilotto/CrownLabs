@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Badge, Popover, Tooltip, Typography } from 'antd';
 import { Button } from 'antd';
 import { InfoOutlined } from '@ant-design/icons';
-import { ExportOutlined } from '@ant-design/icons';
+import { SelectOutlined } from '@ant-design/icons';
 import { type Instance, WorkspaceRole } from '../../../../utils';
 import { PublicExposureModal } from '../PublicExposureModal/PublicExposureModal';
 import { EnvironmentType, Phase } from '../../../../generated-types';
@@ -125,7 +125,7 @@ const RowInstanceActionsExtended: FC<IRowInstanceActionsExtendedProps> = ({
               <Button
                 className="hidden mr-3 xl:inline-block"
                 shape="circle"
-                icon={<ExportOutlined style={{ fontSize: '16px' }} />}
+                icon={<SelectOutlined style={{ fontSize: '16px' }} />}
                 onClick={() => setShowExposureModal(true)}
               />
             </Badge>
