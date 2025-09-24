@@ -97,7 +97,7 @@ export const getInstanceLabels = (
 
 // Helper functions for type conversions
 const safePhaseConversion = (phase: unknown): Phase => {
-  return (phase as Phase) || Phase.Off;
+  return (phase as Phase) || Phase.Starting;
 };
 
 const safePhase5Conversion = (phase: unknown): Phase5 => {

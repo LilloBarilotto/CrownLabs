@@ -51,6 +51,16 @@ const RowInstanceActionsExtended: FC<IRowInstanceActionsExtendedProps> = ({
     environmentType === EnvironmentType.Container ||
     environmentType === EnvironmentType.Standalone;
 
+  // Disable Public Exposure if instance is not ready
+  const publicExposureDisabled = status !== Phase.Ready;
+
+  const getPublicExposureTooltipText = () => {
+    if (publicExposureDisabled) {
+      return 'Instance must be ready in order to request a Public Exposure';
+    }
+    return 'Manage Public Exposure';
+  };
+
   const infoContent = (
     <>
       <p className="m-0">
@@ -115,7 +125,7 @@ const RowInstanceActionsExtended: FC<IRowInstanceActionsExtendedProps> = ({
         </Tooltip>
 
         {instance.allowPublicExposure && (
-          <Tooltip title="Manage Public Exposure">
+          <Tooltip title={getPublicExposureTooltipText()}>
             <Badge
               count={(instance.publicExposure?.ports ?? []).length}
               showZero={false}
@@ -126,7 +136,8 @@ const RowInstanceActionsExtended: FC<IRowInstanceActionsExtendedProps> = ({
                 className="hidden mr-3 xl:inline-block"
                 shape="circle"
                 icon={<SelectOutlined style={{ fontSize: '16px' }} />}
-                onClick={() => setShowExposureModal(true)}
+                onClick={() => publicExposureDisabled ? undefined : setShowExposureModal(true)}
+                disabled={publicExposureDisabled}
               />
             </Badge>
           </Tooltip>
