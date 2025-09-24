@@ -23,7 +23,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-	clv1alpha2 "github.com/netgroup-polito/CrownLabs/operators/api/v1alpha2"
 	clctx "github.com/netgroup-polito/CrownLabs/operators/pkg/context"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/forge"
 	"github.com/netgroup-polito/CrownLabs/operators/pkg/utils"
@@ -35,8 +34,8 @@ func (r *InstanceReconciler) enforcePublicExposureNetworkPolicyPresence(ctx cont
 	log := ctrl.LoggerFrom(ctx)
 	instance := clctx.InstanceFrom(ctx)
 
-	// If the instance is not running or public exposure is not ready, do nothing.
-	if !instance.Spec.Running || instance.Status.PublicExposure == nil || instance.Status.PublicExposure.Phase != clv1alpha2.PublicExposurePhaseReady {
+	// If the instance is not running or public exposure is not requested, do nothing.
+	if !instance.Spec.Running || instance.Status.PublicExposure == nil {
 		return nil
 	}
 
