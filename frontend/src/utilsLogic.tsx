@@ -171,8 +171,9 @@ const buildPublicExposureObject = (
   const spec = publicExposure as PublicExposureSpec;
   const status = publicExposureStatus as PublicExposureStatus;
 
-  const statusPorts = status?.ports || [];
-  const specPorts = spec?.ports || [];
+  // Normalize ports to [] if null/undefined
+  const statusPorts = Array.isArray(status?.ports) ? status.ports : [];
+  const specPorts = Array.isArray(spec?.ports) ? spec.ports : [];
 
   // Create a map for matching status ports with spec ports by targetPort
   const specPortsByTarget = new Map<number, PublicExposurePort>();

@@ -41,6 +41,7 @@ export default gql`
             ports {
               name
               port
+              protocol
               targetPort
             }
           }
